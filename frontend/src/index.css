@@ -1,0 +1,131 @@
+@import "leaflet/dist/leaflet.css";
+@import "leaflet.markercluster/dist/MarkerCluster.css";
+@import "leaflet.markercluster/dist/MarkerCluster.Default.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+@keyframes slideDown {
+  from { transform: translate(-50%, -12px); opacity: 0; }
+  to   { transform: translate(-50%, 0);     opacity: 1; }
+}
+
+/* Safe area utilities for iPhone notch / home indicator */
+.pt-safe { padding-top: env(safe-area-inset-top); }
+.pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+.pl-safe { padding-left: env(safe-area-inset-left); }
+.pr-safe { padding-right: env(safe-area-inset-right); }
+.mb-safe { margin-bottom: env(safe-area-inset-bottom); }
+
+.leaflet-container {
+  background: #f1f5f9 !important;
+  border-radius: 12px;
+}
+
+.leaflet-control-attribution {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 6px !important;
+  font-size: 11px;
+  padding: 4px 8px !important;
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: 8px;
+  box-shadow: 0 10px 15px -3px rgba(15, 23, 42, 0.1);
+  border: 1px solid #e2e8f0;
+}
+
+.leaflet-popup-content {
+  margin: 0;
+  font-size: 13px;
+  font-family: Inter, sans-serif;
+}
+
+.cluster-pulse {
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 12px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.25);
+  animation: pulse 2s infinite;
+}
+
+.bus-marker {
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.2);
+}
+
+.destination-pulse {
+  animation: destination-pulse 2s infinite;
+}
+
+@keyframes destination-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(8, 145, 178, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 12px rgba(8, 145, 178, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(8, 145, 178, 0);
+  }
+}
+
+/* ── "I'm here" selected-alert pin ─────────────────────────────────────── */
+.iam-here-outer {
+  animation: iam-here-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes iam-here-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+  60%       { box-shadow: 0 0 0 22px rgba(239, 68, 68, 0); }
+}
+
+.vehicle-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #1e40af;
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.25);
+  border: 2px solid white;
+}
+
+.venue-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.2);
+}
