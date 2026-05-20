@@ -17,7 +17,7 @@ const PROJECTED_2026_FULL = 197;
 
 const GRID_COLOR = "#2e3347";
 const AXIS_TICK = { fontSize: 10, fill: "#475569" };
-const TT_STYLE = { background: "#1a1d27", border: "1px solid #2e3347", borderRadius: 8, fontSize: 12 };
+const TT_STYLE = { background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 12, color: "#1e293b", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.15)" };
 
 const HEAD_LABELS: Record<string, string> = {
   pocso_rape:           "POCSO Rape",
@@ -368,21 +368,21 @@ export default function AnalyticsPanel({ crimes, patrolZones, vehicles, activeAl
 
           {/* Data quality / under-reporting alert */}
           <ChartCard
-            title="Reporting Data Quality"
+            title="Incomplete Case Records"
             icon={<AlertTriangle className="w-4 h-4 text-amber-400" />}
-            sub="Cases with no recorded time-of-occurrence — a proxy for delayed or incomplete FIR filing."
+            sub="60% of FIRs are missing the time of incident — this limits SSF's ability to schedule patrols when crimes actually happen."
           >
             <div className="flex flex-col items-center justify-center py-3 gap-2">
               <div className="text-5xl font-black text-amber-400">{unknownTimePct}%</div>
               <p className="text-center text-[12px] text-text-secondary font-semibold">
-                of cases have unknown time-of-occurrence
+                of FIRs have no time of incident recorded
               </p>
               <p className="text-center text-[10px] text-text-muted max-w-[220px] leading-relaxed">
-                335 of 555 cases lack time data. This indicates delayed reporting, fear of retaliation, or incomplete FIR documentation at the station level.
+                Out of 555 cases, 335 were filed without a time. Common causes: delayed reporting, reluctance to disclose, and incomplete station documentation.
               </p>
             </div>
             <Insight
-              text="POCSO Sec. 19 mandates reporting by any person with knowledge of an offence. SSF community presence is designed to reduce this gap."
+              text="POCSO Sec. 19 requires anyone with knowledge of an offence to report it immediately. SSF's presence in communities is designed to make timely reporting safer."
               color="amber"
             />
           </ChartCard>
@@ -435,14 +435,17 @@ export default function AnalyticsPanel({ crimes, patrolZones, vehicles, activeAl
           </ResponsiveContainer>
         </ChartCard>
 
-        {/* ── 7. Patrol Zone Intelligence ───────────────────────────────── */}
+        {/* ── 7. SSF Patrol Zone Summary ────────────────────────────────── */}
         <div>
-          <div className="flex items-center gap-2 mb-3">
+          <div className="flex items-center gap-2 mb-1">
             <Navigation className="w-3.5 h-3.5 text-text-muted" />
             <span className="text-[11px] font-semibold text-text-muted uppercase tracking-widest">
-              Patrol Zone Intelligence
+              SSF Patrol Zone Summary
             </span>
           </div>
+          <p className="text-[10px] text-text-muted mb-3 leading-relaxed">
+            Each zone shows its risk score (150+ high · 80–150 medium · &lt;80 low), the time of day when crimes peak (highlighted pill = patrol priority window), and the top crime location to watch.
+          </p>
           {patrolZones.length === 0 ? (
             <p className="text-[11px] text-text-muted text-center py-4">Loading zone data…</p>
           ) : (
@@ -453,6 +456,7 @@ export default function AnalyticsPanel({ crimes, patrolZones, vehicles, activeAl
                   zone.risk_score > 80  ? "#f59e0b" : "#22c55e";
                 const ts = zone.time_slot_risks;
                 const slots: Array<"morning" | "afternoon" | "night"> = ["morning","afternoon","night"];
+                const slotLabels: Record<string, string> = { morning: "Morning 6–12", afternoon: "Afternoon 12–18", night: "Night 18–6" };
                 const dominantSlot = [...slots].sort((a, b) => (ts[b] || 0) - (ts[a] || 0))[0];
                 return (
                   <div key={zone.zone_id} className="bg-surface-L1 rounded-xl border border-border p-4">
@@ -482,7 +486,7 @@ export default function AnalyticsPanel({ crimes, patrolZones, vehicles, activeAl
                               : "bg-surface-L2 border-border text-text-muted"
                           }`}
                         >
-                          {slot} {Math.round((ts[slot] || 0) * 100)}%
+                          {slotLabels[slot]} {Math.round((ts[slot] || 0) * 100)}%
                         </span>
                       ))}
                     </div>

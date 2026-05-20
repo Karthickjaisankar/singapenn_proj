@@ -146,6 +146,41 @@ def _seed_default_users(conn: sqlite3.Connection):
         users
     )
     conn.commit()
+    _seed_demo_alerts(conn)
+
+
+def _seed_demo_alerts(conn: sqlite3.Connection):
+    """Seed 12 demo alerts across Tambaram subdivision (skipped if alerts already exist)."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM alerts")
+    if cursor.fetchone()[0] > 0:
+        return
+
+    # citizen IDs are 4, 5, 6 (inserted after 2 officers + 1 commissioner)
+    alerts = [
+        # (citizen_id, alert_type, description, lat, lng, status, dispatched_vehicle_id, eta_minutes)
+        (4, "sos",         "Help needed urgently",          12.9249, 80.1000, "pending",      None, None),
+        (5, "harassment",  "Being followed near bus stand", 12.9657, 80.1588, "pending",      None, None),
+        (6, "suspicious",  "Unknown men loitering",         12.9062, 80.1490, "pending",      None, None),
+        (4, "medical",     "Accident victim on road",       12.9314, 80.1496, "acknowledged", None, None),
+        (5, "sos",         "Need immediate assistance",     12.9344, 80.2120, "acknowledged", None, None),
+        (6, "harassment",  "Verbal abuse at market",        12.9480, 80.2360, "acknowledged", None, None),
+        (4, "suspicious",  "Abandoned bag near school",     12.9132, 80.1903, "dispatched",   1,    6),
+        (5, "sos",         "Child missing from park",       12.9217, 80.1950, "dispatched",   2,    8),
+        (6, "medical",     "Woman collapsed on street",     12.8900, 80.1300, "dispatched",   1,    5),
+        (4, "harassment",  "Eve-teasing near college",      12.9400, 80.1750, "resolved",     None, None),
+        (5, "other",       "Loud altercation at night",     12.9550, 80.2000, "resolved",     None, None),
+        (6, "other",       "Stray dog attack",              12.9100, 80.1700, "pending",      None, None),
+    ]
+
+    cursor.executemany(
+        """INSERT INTO alerts
+           (citizen_id, alert_type, description, lat, lng, status, dispatched_vehicle_id, eta_minutes)
+           VALUES (?,?,?,?,?,?,?,?)""",
+        alerts,
+    )
+    conn.commit()
+
 
 def _ensure_commissioner_user(conn: sqlite3.Connection):
     """Add commissioner1 if not present (handles existing DBs from before this role existed)."""
