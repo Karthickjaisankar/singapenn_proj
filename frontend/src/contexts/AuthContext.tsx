@@ -42,7 +42,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (storedToken) {
         try {
           const response = await fetch(
-            `${import.meta.env.VITE_API_URL || "http://localhost:8000"}/api/auth/me`,
+            `${import.meta.env.VITE_API_URL ?? ""}/api/auth/me`,
             {
               headers: { Authorization: `Bearer ${storedToken}` },
             }
@@ -79,7 +79,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       formData.append("password", password);
 
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL || "http://localhost:8000"}/api/auth/login`,
+        `${import.meta.env.VITE_API_URL ?? ""}/api/auth/login`,
         {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
