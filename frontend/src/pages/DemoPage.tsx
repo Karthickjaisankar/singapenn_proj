@@ -1,4 +1,9 @@
+import { useTheme } from "../contexts/ThemeContext";
+import { Sun, Moon } from "lucide-react";
+
 export default function DemoPage() {
+  const { theme, toggle } = useTheme();
+
   const panes = [
     { label: "👩 Citizen View",           url: "/login?autoLogin=citizen&demo=1" },
     { label: "🛡️ Police Personnel View",  url: "/login?autoLogin=officer&demo=1" },
@@ -10,7 +15,7 @@ export default function DemoPage() {
         display: "flex",
         flexDirection: "column",
         height: "100vh",
-        background: "#0f172a",
+        background: "var(--bg-base)",
         fontFamily: "system-ui, sans-serif",
       }}
     >
@@ -18,8 +23,8 @@ export default function DemoPage() {
       <div
         style={{
           padding: "10px 20px",
-          background: "#1e293b",
-          borderBottom: "1px solid #334155",
+          background: "var(--surface-L1)",
+          borderBottom: "1px solid var(--border)",
           display: "flex",
           alignItems: "center",
           gap: 14,
@@ -42,13 +47,13 @@ export default function DemoPage() {
           🛡️
         </div>
         <div>
-          <span style={{ color: "#f1f5f9", fontWeight: 800, fontSize: 14, letterSpacing: "-0.3px" }}>
+          <span style={{ color: "var(--text-primary)", fontWeight: 800, fontSize: 14, letterSpacing: "-0.3px" }}>
             Singapenne — Live Demo
           </span>
           <span
             style={{
               marginLeft: 12,
-              color: "#64748b",
+              color: "var(--text-secondary)",
               fontSize: 12,
             }}
           >
@@ -56,15 +61,34 @@ export default function DemoPage() {
           </span>
         </div>
         <div style={{ flex: 1 }} />
+        <button
+          onClick={toggle}
+          title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 32,
+            height: 32,
+            borderRadius: 8,
+            border: "1px solid var(--border)",
+            background: "transparent",
+            color: "var(--text-muted)",
+            cursor: "pointer",
+            flexShrink: 0,
+          }}
+        >
+          {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
+        </button>
         <a
           href="/"
           style={{
-            color: "#475569",
+            color: "var(--text-muted)",
             fontSize: 11,
             fontWeight: 600,
             textDecoration: "none",
             padding: "4px 10px",
-            border: "1px solid #334155",
+            border: "1px solid var(--border)",
             borderRadius: 6,
           }}
         >
@@ -92,19 +116,19 @@ export default function DemoPage() {
               flexDirection: "column",
               borderRadius: 12,
               overflow: "hidden",
-              border: "1px solid #334155",
+              border: "1px solid var(--border)",
               minWidth: 0,
             }}
           >
             <div
               style={{
-                background: "#1e293b",
+                background: "var(--surface-L1)",
                 padding: "6px 14px",
                 fontSize: 12,
                 fontWeight: 700,
-                color: "#94a3b8",
+                color: "var(--text-secondary)",
                 flexShrink: 0,
-                borderBottom: "1px solid #334155",
+                borderBottom: "1px solid var(--border)",
               }}
             >
               {label}

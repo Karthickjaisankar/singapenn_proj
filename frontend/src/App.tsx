@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "./main";
+import { ThemeProvider } from "./contexts/ThemeContext";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import LoginPage from "./pages/LoginPage";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -26,9 +27,10 @@ function RootRedirect() {
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <Router>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <Router>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route
@@ -52,8 +54,9 @@ export default function App() {
             <Route path="/" element={<RootRedirect />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
-        </Router>
-      </AuthProvider>
-    </QueryClientProvider>
+          </Router>
+        </AuthProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }

@@ -824,15 +824,15 @@ export default function Map({
       {/* View mode toggle + layer toggles — hidden in citizen mode */}
       {!hideCrimes && (
         <>
-          <div className="absolute top-3 left-3 z-[1000] flex items-center bg-black/65 backdrop-blur-md border border-white/10 rounded-xl p-1 shadow-lg gap-0.5">
+          <div className="absolute top-3 left-3 z-[1000] flex items-center bg-surface-L2/90 backdrop-blur-md border border-border rounded-xl p-1 shadow-lg gap-0.5">
             {(["zones", "crimes"] as MapMode[]).map(opt => (
               <button
                 key={opt}
                 onClick={() => setMode(opt)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
                   mode === opt
-                    ? "bg-white/20 text-white"
-                    : "text-white/55 hover:text-white/85"
+                    ? "bg-surface-L3 text-text-primary"
+                    : "text-text-muted hover:text-text-secondary"
                 }`}
               >
                 {opt === "zones" ? "Zone View" : "Crime View"}
@@ -840,14 +840,14 @@ export default function Map({
             ))}
           </div>
 
-          <div className="absolute top-14 left-3 z-[1000] bg-black/65 backdrop-blur-md border border-white/10 rounded-xl px-3 py-2.5 shadow-lg space-y-1.5">
+          <div className="absolute top-14 left-3 z-[1000] bg-surface-L2/90 backdrop-blur-md border border-border rounded-xl px-3 py-2.5 shadow-lg space-y-1.5">
             {([
               { label: "Heatmap", value: showHeatmap, set: setShowHeatmap, onlyInCrimes: true },
               { label: `Venues (zoom ${venueZoomThresholdRef.current}+)`, value: showVenues,  set: setShowVenues,  onlyInCrimes: false },
               { label: "Alerts",  value: showAlerts,  set: setShowAlerts,  onlyInCrimes: false },
             ] as const).map(({ label, value, set, onlyInCrimes }) => (
               (!onlyInCrimes || mode === "crimes") && (
-                <label key={label} className="flex items-center gap-2 cursor-pointer text-xs text-white/70 hover:text-white transition">
+                <label key={label} className="flex items-center gap-2 cursor-pointer text-xs text-text-secondary hover:text-text-primary transition">
                   <input
                     type="checkbox"
                     checked={value}
@@ -866,17 +866,17 @@ export default function Map({
       {selectedAlertId && (
         <button
           onClick={onResetView}
-          className="absolute top-3 right-14 z-[1000] flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-black/65 backdrop-blur-md border border-white/20 text-white/80 hover:text-white hover:bg-black/80 shadow-lg transition"
+          className="absolute top-3 right-14 z-[1000] flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-surface-L2/90 backdrop-blur-md border border-border text-text-secondary hover:text-text-primary hover:bg-surface-L2 shadow-lg transition"
         >
           ↩ Reset view
         </button>
       )}
 
       {/* Legend */}
-      {!hideCrimes && (<div className="absolute bottom-4 right-14 z-[1000] bg-black/65 backdrop-blur-md border border-white/10 rounded-xl p-3 shadow-lg min-w-[140px]">
+      {!hideCrimes && (<div className="absolute bottom-4 right-14 z-[1000] bg-surface-L2/90 backdrop-blur-md border border-border rounded-xl p-3 shadow-lg min-w-[140px]">
         {mode === "zones" ? (
           <>
-            <p className="text-[10px] font-bold text-white/55 uppercase tracking-widest mb-2">Crime Count</p>
+            <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Crime Count</p>
             {[
               { color: "#dc2626", label: "High  (90+)" },
               { color: "#f97316", label: "Med-H (60–90)" },
@@ -885,13 +885,13 @@ export default function Map({
             ].map(({ color, label }) => (
               <div key={label} className="flex items-center gap-2 mb-1.5">
                 <div className="w-3 h-3 rounded-sm shrink-0" style={{ background: color }} />
-                <span className="text-[11px] text-white/80">{label}</span>
+                <span className="text-[11px] text-text-secondary">{label}</span>
               </div>
             ))}
           </>
         ) : (
           <>
-            <p className="text-[10px] font-bold text-white/55 uppercase tracking-widest mb-2">Severity</p>
+            <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Severity</p>
             {[
               { color: "#dc2626", label: "Severe" },
               { color: "#f59e0b", label: "Moderate" },
@@ -899,30 +899,30 @@ export default function Map({
             ].map(({ color, label }) => (
               <div key={label} className="flex items-center gap-2 mb-1.5">
                 <div className="w-3 h-3 rounded-sm shrink-0" style={{ background: color }} />
-                <span className="text-[11px] text-white/80">{label}</span>
+                <span className="text-[11px] text-text-secondary">{label}</span>
               </div>
             ))}
           </>
         )}
-        <div className="mt-2 pt-2 border-t border-white/10 space-y-1.5">
+        <div className="mt-2 pt-2 border-t border-border space-y-1.5">
           {([1, 2, 3, 4] as const).map(id => (
             <div key={id} className="flex items-center gap-2">
               <div
                 className="w-3 h-3 rounded-sm shrink-0"
                 style={{ background: vehicleColor(id), boxShadow: `0 0 5px ${vehicleColor(id)}88` }}
               />
-              <span className="text-[11px] text-white/80">SSF-{id}</span>
+              <span className="text-[11px] text-text-secondary">SSF-{id}</span>
             </div>
           ))}
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full shrink-0 bg-red-500 ring-2 ring-red-400/40" />
-            <span className="text-[11px] text-white/80">SOS Alert</span>
+            <span className="text-[11px] text-text-secondary">SOS Alert</span>
           </div>
         </div>
 
         {showVenues && (
-          <div className="mt-2 pt-2 border-t border-white/10">
-            <p className="text-[10px] font-bold text-white/55 uppercase tracking-widest mb-1.5">Venues</p>
+          <div className="mt-2 pt-2 border-t border-border">
+            <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1.5">Venues</p>
             <div className="space-y-1">
               {Object.values(VENUE_EMOJI).map(({ emoji, color, label }) => (
                 <div key={label} className="flex items-center gap-2">
@@ -932,7 +932,7 @@ export default function Map({
                   >
                     {emoji}
                   </span>
-                  <span className="text-[11px] text-white/80">{label}</span>
+                  <span className="text-[11px] text-text-secondary">{label}</span>
                 </div>
               ))}
             </div>
@@ -941,8 +941,8 @@ export default function Map({
       </div>)}
 
       {isLoading && (
-        <div className="absolute inset-0 bg-black/30 flex items-center justify-center z-[500]">
-          <div className="bg-black/65 backdrop-blur-md text-white/80 text-sm font-medium px-4 py-2.5 rounded-xl border border-white/10 animate-pulse">
+        <div className="absolute inset-0 bg-bg-dark/30 flex items-center justify-center z-[500]">
+          <div className="bg-surface-L2/90 backdrop-blur-md text-text-secondary text-sm font-medium px-4 py-2.5 rounded-xl border border-border animate-pulse">
             Loading map data…
           </div>
         </div>

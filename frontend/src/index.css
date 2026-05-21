@@ -2,14 +2,42 @@
 @import "leaflet.markercluster/dist/MarkerCluster.css";
 @import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 
+/* ── Theme tokens ────────────────────────────────────────────────────────── */
+:root {
+  --bg-base:        #0f1117;
+  --surface-L1:     #1a1d27;
+  --surface-L2:     #22263a;
+  --surface-L3:     #2a2f45;
+  --text-primary:   #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted:     #475569;
+  --border:         #2e3347;
+  --border-strong:  #3d4463;
+}
+
+:root.light {
+  --bg-base:        #f8fafc;
+  --surface-L1:     #ffffff;
+  --surface-L2:     #f8fafc;
+  --surface-L3:     #f1f5f9;
+  --text-primary:   #0f172a;
+  --text-secondary: #475569;
+  --text-muted:     #94a3b8;
+  --border:         #e2e8f0;
+  --border-strong:  #cbd5e1;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-* {
+*,
+*::before,
+*::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.15s ease;
 }
 
 html,
@@ -18,8 +46,8 @@ body,
   width: 100%;
   height: 100%;
   font-family: Inter, system-ui, -apple-system, sans-serif;
-  background: #f8fafc;
-  color: #0f172a;
+  background: var(--bg-base);
+  color: var(--text-primary);
 }
 
 @keyframes slideDown {

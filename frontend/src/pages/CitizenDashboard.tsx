@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../contexts/AuthContext";
+import { useTheme } from "../contexts/ThemeContext";
 import { api } from "../api";
 import { AlertRow, AlertType, PatrolVehicle, Crime, PatrolZone, Venue } from "../types";
-import { LogOut, Map, AlertTriangle, FileText, X, CheckCircle2, Clock } from "lucide-react";
+import { LogOut, Map, AlertTriangle, FileText, X, CheckCircle2, Clock, Sun, Moon } from "lucide-react";
 import MapComponent from "../components/Map";
 
 const ALERT_TYPES: { value: AlertType; label: string; icon: string }[] = [
@@ -32,8 +33,8 @@ const STATUS_STYLE: Record<string, string> = {
   pending:      "bg-amber-100 text-amber-700",
   acknowledged: "bg-blue-100 text-blue-700",
   dispatched:   "bg-green-100 text-green-700",
-  resolved:     "bg-slate-100 text-slate-600",
-  cancelled:    "bg-slate-100 text-slate-400",
+  resolved:     "bg-surface-L3 text-text-secondary",
+  cancelled:    "bg-surface-L3 text-text-muted",
 };
 
 function relTime(iso: string) {
@@ -54,6 +55,7 @@ type SOSFlowState = "idle" | "sheet" | "sending" | "sent" | "acknowledged" | "di
 
 export default function CitizenDashboard() {
   const { user, logout } = useAuth();
+  const { theme, toggle: toggleTheme } = useTheme();
 
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const [alerts, setAlerts] = useState<AlertRow[]>([]);
@@ -199,25 +201,34 @@ export default function CitizenDashboard() {
   const isSheetOpen = sosFlow === "sheet";
 
   return (
-    <div className="h-screen w-full overflow-hidden bg-white relative flex flex-col">
+    <div className="h-screen w-full overflow-hidden bg-bg-dark relative flex flex-col">
 
       {/* ── Header ── */}
-      <div className="relative z-20 pt-safe px-4 py-3 flex items-center justify-between shrink-0 bg-white/90 backdrop-blur-sm border-b border-slate-100">
+      <div className="relative z-20 pt-safe px-4 py-3 flex items-center justify-between shrink-0 bg-surface-L1/90 backdrop-blur-sm border-b border-border">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-lg bg-red-600 flex items-center justify-center shrink-0">
             <AlertTriangle className="w-4 h-4 text-white" />
           </div>
           <div>
-            <p className="text-xs font-black text-slate-900 tracking-wide leading-none">Singapenne</p>
-            <p className="text-[10px] text-slate-500 leading-none mt-0.5">{user?.full_name ?? "Citizen"}</p>
+            <p className="text-xs font-black text-text-primary tracking-wide leading-none">Singapenne</p>
+            <p className="text-[10px] text-text-muted leading-none mt-0.5">{user?.full_name ?? "Citizen"}</p>
           </div>
         </div>
-        <button
-          onClick={logout}
-          className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 active:scale-95 transition"
-        >
-          <LogOut className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={toggleTheme}
+            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            className="w-9 h-9 rounded-full bg-surface-L2 flex items-center justify-center text-text-muted hover:text-text-primary active:scale-95 transition"
+          >
+            {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </button>
+          <button
+            onClick={logout}
+            className="w-9 h-9 rounded-full bg-surface-L2 flex items-center justify-center text-text-muted hover:text-text-primary active:scale-95 transition"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* ── Tab content ── */}
@@ -244,10 +255,10 @@ export default function CitizenDashboard() {
 
             {/* SENDING — spinner overlay */}
             {sosFlow === "sending" && (
-              <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/50 backdrop-blur-sm">
-                <div className="bg-white rounded-2xl px-8 py-6 shadow-xl flex flex-col items-center gap-3">
+              <div className="absolute inset-0 z-20 flex items-center justify-center bg-surface-L1/50 backdrop-blur-sm">
+                <div className="bg-surface-L1 rounded-2xl px-8 py-6 shadow-xl flex flex-col items-center gap-3">
                   <div className="w-10 h-10 border-4 border-red-200 border-t-red-600 rounded-full animate-spin" />
-                  <p className="text-sm font-semibold text-slate-700">Sending alert…</p>
+                  <p className="text-sm font-semibold text-text-secondary">Sending alert…</p>
                 </div>
               </div>
             )}
@@ -281,7 +292,7 @@ export default function CitizenDashboard() {
             {/* DISPATCHED — center card */}
             {sosFlow === "dispatched" && dispatchInfo && (
               <div className="absolute inset-0 z-20 flex items-end justify-center pb-24 px-5 pointer-events-none">
-                <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl overflow-hidden pointer-events-auto"
+                <div className="w-full max-w-sm bg-surface-L1 rounded-3xl shadow-2xl overflow-hidden pointer-events-auto"
                   style={{ boxShadow: "0 8px 40px rgba(22,163,74,0.25)" }}>
                   {/* Green header */}
                   <div className="bg-green-600 px-5 py-4">
@@ -297,14 +308,14 @@ export default function CitizenDashboard() {
                       <p className="text-4xl font-black text-green-700 tabular-nums">{dispatchInfo.etaMinutes}</p>
                       <p className="text-green-600 text-sm font-semibold">minutes away</p>
                     </div>
-                    <div className="flex items-center gap-2 text-slate-500 text-xs bg-slate-50 rounded-xl px-3 py-2">
+                    <div className="flex items-center gap-2 text-text-muted text-xs bg-surface-L2 rounded-xl px-3 py-2">
                       <span className="text-base">📍</span>
                       <span>Your exact location has been shared with the officer</span>
                     </div>
                   </div>
-                  <div className="border-t border-slate-100 px-5 py-3">
+                  <div className="border-t border-border px-5 py-3">
                     <button onClick={handleCancelAlert}
-                      className="w-full text-sm text-slate-400 hover:text-slate-600 py-1 transition-colors">
+                      className="w-full text-sm text-text-muted hover:text-text-secondary py-1 transition-colors">
                       I'm safe now — cancel alert
                     </button>
                   </div>
@@ -315,7 +326,7 @@ export default function CitizenDashboard() {
             {/* RESOLVED — "Police Reached" full overlay */}
             {sosFlow === "resolved" && (
               <div className="absolute inset-0 z-20 flex items-center justify-center px-5 bg-green-50/80 backdrop-blur-sm">
-                <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl overflow-hidden text-center"
+                <div className="w-full max-w-sm bg-surface-L1 rounded-3xl shadow-2xl overflow-hidden text-center"
                   style={{ boxShadow: "0 8px 40px rgba(22,163,74,0.3)" }}>
                   <div className="bg-green-600 px-5 py-6">
                     <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-3">
@@ -326,7 +337,7 @@ export default function CitizenDashboard() {
                   </div>
                   <div className="px-5 py-5 space-y-3">
                     <div className="bg-green-50 rounded-2xl px-4 py-3">
-                      <p className="text-slate-600 text-sm">The officer has marked your alert as resolved. If you need further help, raise a new alert or call directly.</p>
+                      <p className="text-text-secondary text-sm">The officer has marked your alert as resolved. If you need further help, raise a new alert or call directly.</p>
                     </div>
                     <button
                       onClick={() => { setSosFlow("idle"); setActiveAlert(null); setDispatchInfo(null); }}
@@ -354,7 +365,7 @@ export default function CitizenDashboard() {
                     <span className="text-white font-black text-lg tracking-widest">SOS</span>
                   </div>
                 </button>
-                <p className="text-xs text-slate-600 bg-white/80 backdrop-blur-sm px-3 py-1 rounded-full shadow-sm font-medium">
+                <p className="text-xs text-text-secondary bg-surface-L1/80 backdrop-blur-sm px-3 py-1 rounded-full shadow-sm font-medium">
                   Tap for emergency help
                 </p>
               </div>
@@ -364,11 +375,11 @@ export default function CitizenDashboard() {
 
         {/* REPORT TAB */}
         {activeTab === "report" && (
-          <div className="absolute inset-0 overflow-y-auto bg-slate-50 p-4">
+          <div className="absolute inset-0 overflow-y-auto bg-surface-L2 p-4">
             <div className="max-w-sm mx-auto">
               <div className="mb-5">
-                <h2 className="text-base font-bold text-slate-900">Report an Incident</h2>
-                <p className="text-xs text-slate-500 mt-0.5">For non-emergency reports. Police will be notified.</p>
+                <h2 className="text-base font-bold text-text-primary">Report an Incident</h2>
+                <p className="text-xs text-text-muted mt-0.5">For non-emergency reports. Police will be notified.</p>
               </div>
 
               {reportSuccess ? (
@@ -384,13 +395,13 @@ export default function CitizenDashboard() {
                   </button>
                 </div>
               ) : (
-                <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-4 shadow-sm">
+                <div className="bg-surface-L1 rounded-2xl border border-border p-4 space-y-4 shadow-sm">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Incident Type</label>
+                    <label className="block text-xs font-semibold text-text-muted uppercase tracking-wide mb-1.5">Incident Type</label>
                     <select
                       value={reportType}
                       onChange={(e) => setReportType(e.target.value)}
-                      className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-300"
+                      className="w-full px-3 py-2.5 bg-surface-L2 border border-border rounded-xl text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-red-300"
                     >
                       {REPORT_TYPES.map((t) => (
                         <option key={t} value={t}>{t}</option>
@@ -399,25 +410,25 @@ export default function CitizenDashboard() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Location / Landmark</label>
+                    <label className="block text-xs font-semibold text-text-muted uppercase tracking-wide mb-1.5">Location / Landmark</label>
                     <input
                       type="text"
                       value={reportPlace}
                       onChange={(e) => setReportPlace(e.target.value)}
                       placeholder="e.g. Near Vandalur Zoo bus stop"
-                      className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-300"
+                      className="w-full px-3 py-2.5 bg-surface-L2 border border-border rounded-xl text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-red-300"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Description <span className="normal-case font-normal text-slate-400">(optional)</span></label>
+                    <label className="block text-xs font-semibold text-text-muted uppercase tracking-wide mb-1.5">Description <span className="normal-case font-normal text-text-muted">(optional)</span></label>
                     <textarea
                       value={reportDesc}
                       onChange={(e) => setReportDesc(e.target.value)}
                       placeholder="Describe what you witnessed…"
                       rows={3}
                       maxLength={300}
-                      className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-300 resize-none"
+                      className="w-full px-3 py-2.5 bg-surface-L2 border border-border rounded-xl text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-red-300 resize-none"
                     />
                   </div>
 
@@ -436,23 +447,23 @@ export default function CitizenDashboard() {
 
         {/* ALERTS TAB */}
         {activeTab === "alerts" && (
-          <div className="absolute inset-0 overflow-y-auto bg-slate-50 p-4">
+          <div className="absolute inset-0 overflow-y-auto bg-surface-L2 p-4">
             <div className="max-w-sm mx-auto">
-              <h2 className="text-base font-bold text-slate-900 mb-4">My Alerts</h2>
+              <h2 className="text-base font-bold text-text-primary mb-4">My Alerts</h2>
               {alerts.length === 0 ? (
                 <div className="text-center py-12">
-                  <Clock className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-                  <p className="text-sm text-slate-400">No alerts yet.</p>
+                  <Clock className="w-10 h-10 text-text-muted opacity-40 mx-auto mb-2" />
+                  <p className="text-sm text-text-muted">No alerts yet.</p>
                 </div>
               ) : (
                 <div className="space-y-2">
                   {alerts.map((alert) => (
-                    <div key={alert.id} className="flex items-center gap-3 p-3 bg-white rounded-xl border border-slate-100 shadow-sm">
+                    <div key={alert.id} className="flex items-center gap-3 p-3 bg-surface-L1 rounded-xl border border-border shadow-sm">
                       <span className="text-xl">{ALERT_TYPES.find((t) => t.value === alert.alert_type)?.icon ?? "📢"}</span>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-slate-900 capitalize">{alert.alert_type}</p>
-                        {alert.description && <p className="text-xs text-slate-400 truncate">{alert.description}</p>}
-                        <p className="text-[11px] text-slate-400">{relTime(alert.created_at)}</p>
+                        <p className="text-sm font-semibold text-text-primary capitalize">{alert.alert_type}</p>
+                        {alert.description && <p className="text-xs text-text-muted truncate">{alert.description}</p>}
+                        <p className="text-[11px] text-text-muted">{relTime(alert.created_at)}</p>
                       </div>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${STATUS_STYLE[alert.status] ?? ""}`}>
                         {alert.status}
@@ -467,7 +478,7 @@ export default function CitizenDashboard() {
       </div>
 
       {/* ── Bottom tab bar ── */}
-      <div className="relative z-20 bg-white border-t border-slate-100 pb-safe shrink-0">
+      <div className="relative z-20 bg-surface-L1 border-t border-border pb-safe shrink-0">
         <div className="grid grid-cols-3">
           {([
             { id: "home",   label: "Home",    icon: <Map className="w-5 h-5" /> },
@@ -478,7 +489,7 @@ export default function CitizenDashboard() {
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`flex flex-col items-center py-3 gap-0.5 relative transition ${
-                activeTab === tab.id ? "text-red-600" : "text-slate-400"
+                activeTab === tab.id ? "text-red-600" : "text-text-muted"
               }`}
             >
               {tab.icon}
@@ -502,18 +513,18 @@ export default function CitizenDashboard() {
             onClick={() => setSosFlow("idle")}
           />
           {/* Sheet */}
-          <div className="absolute bottom-0 left-0 right-0 z-40 bg-white rounded-t-3xl shadow-2xl pb-safe">
+          <div className="absolute bottom-0 left-0 right-0 z-40 bg-surface-L1 rounded-t-3xl shadow-2xl pb-safe">
             {/* Drag handle */}
             <div className="flex justify-center pt-3 pb-1">
-              <div className="w-10 h-1 rounded-full bg-slate-300" />
+              <div className="w-10 h-1 rounded-full bg-surface-L3" />
             </div>
 
             <div className="px-5 pb-5">
               {/* Header row */}
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-base font-bold text-slate-900">Select Alert Type</h3>
-                <button onClick={() => setSosFlow("idle")} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center active:scale-95">
-                  <X className="w-4 h-4 text-slate-500" />
+                <h3 className="text-base font-bold text-text-primary">Select Alert Type</h3>
+                <button onClick={() => setSosFlow("idle")} className="w-8 h-8 rounded-full bg-surface-L2 flex items-center justify-center active:scale-95">
+                  <X className="w-4 h-4 text-text-muted" />
                 </button>
               </div>
 
@@ -526,7 +537,7 @@ export default function CitizenDashboard() {
                     className={`flex items-center gap-1.5 px-3.5 py-2 rounded-2xl border font-semibold text-sm transition active:scale-95
                       ${alertType === t.value
                         ? "bg-red-50 border-red-500 text-red-700 shadow-sm"
-                        : "bg-slate-50 border-slate-200 text-slate-600"
+                        : "bg-surface-L2 border-border text-text-secondary"
                       }`}
                   >
                     <span className="text-base leading-none">{t.icon}</span>
@@ -542,7 +553,7 @@ export default function CitizenDashboard() {
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Describe what's happening (optional)"
                 maxLength={120}
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-300 mb-4"
+                className="w-full px-4 py-2.5 bg-surface-L2 border border-border rounded-xl text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-red-300 mb-4"
               />
 
               {/* Quick-call strip */}
@@ -551,11 +562,11 @@ export default function CitizenDashboard() {
                   <a
                     key={c.tel}
                     href={c.tel}
-                    className="flex flex-col items-center py-2 bg-slate-50 rounded-xl border border-slate-100 active:bg-slate-100 transition gap-0.5"
+                    className="flex flex-col items-center py-2 bg-surface-L2 rounded-xl border border-border active:bg-surface-L3 transition gap-0.5"
                   >
                     <span className="text-lg leading-none">{c.icon}</span>
-                    <span className="text-[10px] font-bold text-slate-700">{c.label}</span>
-                    <span className="text-[9px] text-slate-400 leading-none">{c.sub}</span>
+                    <span className="text-[10px] font-bold text-text-secondary">{c.label}</span>
+                    <span className="text-[9px] text-text-muted leading-none">{c.sub}</span>
                   </a>
                 ))}
               </div>

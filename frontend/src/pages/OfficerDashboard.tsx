@@ -6,7 +6,8 @@ import Map from "../components/Map.tsx";
 import AnalyticsPanel from "../components/AnalyticsPanel";
 import { Crime, PatrolZone, PatrolVehicle, Venue, ZoneRisk, AlertRow } from "../types";
 // ZoneRisk used by routing panel; PatrolZone used by AnalyticsPanel
-import { LogOut, Radio, Monitor } from "lucide-react";
+import { LogOut, Radio, Monitor, Sun, Moon } from "lucide-react";
+import { useTheme } from "../contexts/ThemeContext";
 
 // Station list mirrored from Map.tsx for nearest-station lookup
 const STATIONS_REF = [
@@ -750,6 +751,7 @@ function playAlertTone() {
 
 export default function OfficerDashboard() {
   const { user, logout } = useAuth();
+  const { theme, toggle: toggleTheme } = useTheme();
   const { alerts, connected } = useAlerts(user?.token ?? "");
   const seenAlertIdsRef = useRef<Set<number>>(new Set());
 
@@ -930,6 +932,13 @@ export default function OfficerDashboard() {
             <Monitor className="w-4 h-4" />
             <span className="hidden sm:inline">Demo</span>
           </a>
+          <button
+            onClick={toggleTheme}
+            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            className="flex items-center justify-center w-8 h-8 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-L2 transition"
+          >
+            {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </button>
           <button
             onClick={logout}
             className="flex items-center gap-1.5 text-text-muted hover:text-text-primary transition text-xs"

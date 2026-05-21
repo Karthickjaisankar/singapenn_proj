@@ -30,26 +30,26 @@ export default {
           800: "#1e293b",
           900: "#0f172a",
         },
-        // Dark surface palette — officer & commissioner UI
+        // Surface palette — responds to theme via CSS variables
         surface: {
-          L1: "#1a1d27",
-          L2: "#22263a",
-          L3: "#2a2f45",
+          L1: "var(--surface-L1)",
+          L2: "var(--surface-L2)",
+          L3: "var(--surface-L3)",
         },
-        // Semantic border colors for dark UI
+        // Semantic border colors — responds to theme
         border: {
-          DEFAULT: "#2e3347",
-          strong: "#3d4463",
+          DEFAULT: "var(--border)",
+          strong:  "var(--border-strong)",
         },
-        // Text scale for dark UI
+        // Text scale — responds to theme
         text: {
-          primary: "#f1f5f9",
-          secondary: "#94a3b8",
-          muted: "#475569",
+          primary:   "var(--text-primary)",
+          secondary: "var(--text-secondary)",
+          muted:     "var(--text-muted)",
         },
-        // Dark background
+        // Base background — responds to theme
         bg: {
-          dark: "#0f1117",
+          dark: "var(--bg-base)",
         },
       },
       fontFamily: {

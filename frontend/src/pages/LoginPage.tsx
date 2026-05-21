@@ -1,7 +1,8 @@
 import { useState, FormEvent, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { Eye, EyeOff, Shield } from "lucide-react";
+import { useTheme } from "../contexts/ThemeContext";
+import { Eye, EyeOff, Shield, Sun, Moon } from "lucide-react";
 
 const DEMO_CREDENTIALS = [
   { label: "Police Personnel", username: "officer1", password: "officer1pass", color: "text-blue-400 border-blue-500/30 hover:bg-blue-500/10" },
@@ -52,8 +53,19 @@ export default function LoginPage() {
     return () => clearTimeout(t);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const { theme, toggle } = useTheme();
+
   return (
     <div className="min-h-screen bg-bg-dark flex items-center justify-center p-4">
+      {/* Theme toggle */}
+      <button
+        onClick={toggle}
+        title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+        className="absolute top-4 right-4 z-10 flex items-center justify-center w-9 h-9 rounded-xl text-text-muted hover:text-text-primary hover:bg-surface-L2 transition"
+      >
+        {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+      </button>
+
       {/* Subtle radial glow behind card */}
       <div
         className="absolute inset-0 pointer-events-none"
