@@ -19,9 +19,10 @@ RUN cd frontend && npm ci
 COPY frontend/ ./frontend/
 RUN cd frontend && npm run build
 
-# Backend + data
+# Backend + data + geocode cache (crimes + venues pre-geocoded, no Google API needed)
 COPY backend/ ./backend/
 COPY data/ ./data/
+COPY cache/ ./cache/
 
 EXPOSE 8080
 CMD uvicorn backend.app:app --host 0.0.0.0 --port ${PORT:-8080}
