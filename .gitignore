@@ -48,9 +48,9 @@ yarn-error.log
 # Frontend build
 frontend/dist/
 
-# Cache
-cache/
+# Cache — geocode.sqlite is committed to avoid requiring Google API on Railway
 *.sqlite
+!cache/geocode.sqlite
 *.db
 .pytest_cache/
 
