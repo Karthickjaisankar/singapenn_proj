@@ -957,6 +957,7 @@ export default function OfficerDashboard() {
               vehicles={displayVehicles}
               venues={venues}
               isLoading={isLoading}
+              venueZoomThreshold={12}
               activeAlerts={alerts.filter(a => !["resolved", "cancelled"].includes(a.status))}
               selectedAlertId={selectedAlertId}
               onResetView={() => setSelectedAlertId(null)}

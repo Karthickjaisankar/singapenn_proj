@@ -843,7 +843,7 @@ export default function Map({
           <div className="absolute top-14 left-3 z-[1000] bg-black/65 backdrop-blur-md border border-white/10 rounded-xl px-3 py-2.5 shadow-lg space-y-1.5">
             {([
               { label: "Heatmap", value: showHeatmap, set: setShowHeatmap, onlyInCrimes: true },
-              { label: "Venues (zoom 14+)", value: showVenues,  set: setShowVenues,  onlyInCrimes: false },
+              { label: `Venues (zoom ${venueZoomThresholdRef.current}+)`, value: showVenues,  set: setShowVenues,  onlyInCrimes: false },
               { label: "Alerts",  value: showAlerts,  set: setShowAlerts,  onlyInCrimes: false },
             ] as const).map(({ label, value, set, onlyInCrimes }) => (
               (!onlyInCrimes || mode === "crimes") && (
