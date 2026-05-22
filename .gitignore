@@ -78,5 +78,8 @@ credentials/
 # Screenshots / test artifacts
 *.png
 *.jpg
+# Allow logo assets in frontend/public
+!frontend/public/*.png
+!frontend/public/*.jpg
 .playwright-mcp/
 mcp-playwright/
