@@ -30,6 +30,7 @@ from backend.database import (
     get_all_alerts, update_alert_status, upsert_alert_location,
     get_latest_location,
     create_alert_message, get_messages_for_alert, get_live_alert_summary,
+    update_alert_report, get_all_patrol_tracks_today,
     log_patrol_position, get_last_telemetry, get_patrol_telemetry,
     get_stationary_alerts, get_shift_km,
     create_incident_report, get_incident_report, get_all_reports, escalate_report,
@@ -293,9 +294,9 @@ def _reporting_gap_stats(crimes: list) -> dict:
 
 
 async def _patrol_telemetry_loop():
-    """Record patrol positions every 5 minutes for anomaly detection."""
+    """Record patrol positions every 60 seconds for spaghetti trail and anomaly detection."""
     while True:
-        await asyncio.sleep(300)
+        await asyncio.sleep(60)
         try:
             with _LOCK:
                 vehicles = list(_STATE["vehicles"])
@@ -967,20 +968,75 @@ async def accept_alert(alert_id: int, current_user: dict = Depends(require_patro
 
 
 @app.post("/api/alerts/{alert_id}/message")
-async def send_patrol_message(alert_id: int, request: dict, current_user: dict = Depends(require_patrol)):
-    """Patrol officer sends a message visible to the citizen."""
+async def send_alert_message(alert_id: int, request: dict, current_user: dict = Depends(get_current_user)):
+    """Patrol officer or citizen sends a message on their alert."""
+    alert = get_alert_by_id(alert_id)
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+
+    role = current_user["role"]
+    uid  = current_user["user_id"]
+    vid  = current_user.get("vehicle_id")
+
+    is_patrol  = role == "patrol" and alert.get("dispatched_vehicle_id") == vid
+    is_citizen = role == "citizen" and alert["citizen_id"] == uid
+
+    if not is_patrol and not is_citizen:
+        raise HTTPException(status_code=403, detail="Not authorized to message on this alert")
+
+    body = request.get("body", "").strip()
+    if not body:
+        raise HTTPException(status_code=400, detail="Message body required")
+
+    sender_role = "patrol" if is_patrol else "citizen"
+    msg = create_alert_message(alert_id, uid, sender_role, body)
+    await ws_manager.broadcast({"type": "alert_updated", "alert": get_alert_by_id(alert_id)})
+    return {"message": msg}
+
+
+@app.put("/api/alerts/{alert_id}/arrive")
+async def patrol_arrive(alert_id: int, current_user: dict = Depends(require_patrol)):
+    """Patrol officer marks arrival on scene."""
     alert = get_alert_by_id(alert_id)
     if not alert:
         raise HTTPException(status_code=404, detail="Alert not found")
     if alert.get("dispatched_vehicle_id") != current_user.get("vehicle_id"):
-        raise HTTPException(status_code=403, detail="This alert is not assigned to your vehicle")
-    body = request.get("body", "").strip()
-    if not body:
-        raise HTTPException(status_code=400, detail="Message body required")
-    msg = create_alert_message(alert_id, current_user["user_id"], "patrol", body)
-    # Broadcast alert_updated so citizen 3s poll picks up the new message
-    await ws_manager.broadcast({"type": "alert_updated", "alert": get_alert_by_id(alert_id)})
-    return {"message": msg}
+        raise HTTPException(status_code=403, detail="Not your alert")
+    updated = update_alert_status(alert_id, status="on_scene")
+    await ws_manager.broadcast({"type": "alert_updated", "alert": updated})
+    return {"alert": updated}
+
+
+@app.put("/api/alerts/{alert_id}/file-report")
+async def file_report(alert_id: int, request: dict, current_user: dict = Depends(require_patrol)):
+    """Patrol officer files DSR or CSR report, auto-resolving the alert."""
+    alert = get_alert_by_id(alert_id)
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    if alert.get("dispatched_vehicle_id") != current_user.get("vehicle_id"):
+        raise HTTPException(status_code=403, detail="Not your alert")
+    report_type = request.get("report_type", "").upper()
+    if report_type not in ("DSR", "CSR"):
+        raise HTTPException(status_code=400, detail="report_type must be DSR or CSR")
+    report_notes = request.get("report_notes", "")
+    updated = update_alert_report(alert_id, report_type, report_notes)
+    # Return vehicle to patrolling status
+    vehicle_id = alert.get("dispatched_vehicle_id")
+    if vehicle_id:
+        with _LOCK:
+            vehicle = next((v for v in _STATE["vehicles"] if v["id"] == vehicle_id), None)
+            if vehicle:
+                vehicle["status"] = "patrolling"
+                vehicle["incident_location"] = None
+    await ws_manager.broadcast({"type": "alert_updated", "alert": updated})
+    return {"alert": updated}
+
+
+@app.get("/api/patrol/all-tracks")
+def get_all_tracks(current_user: dict = Depends(require_command)):
+    """Return today's patrol telemetry for all 4 vehicles (spaghetti trail view)."""
+    tracks = get_all_patrol_tracks_today()
+    return {"tracks": tracks}
 
 
 @app.get("/api/alerts/{alert_id}/messages")

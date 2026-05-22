@@ -131,6 +131,8 @@ export default function CitizenDashboard() {
             vehicleId: vid,
             etaMinutes: latest.eta_minutes ?? 5,
           });
+        } else if (latest.status === "on_scene" && ["sent", "acknowledged", "dispatched"].includes(sosFlow)) {
+          setSosFlow("dispatched"); // keep dispatched card visible, patrol has arrived
         } else if (latest.status === "resolved" && ["sent", "acknowledged", "dispatched"].includes(sosFlow)) {
           setSosFlow("resolved");
         }
@@ -196,6 +198,17 @@ export default function CitizenDashboard() {
       setReportSubmitting(false);
     }
   };
+
+  // ── Citizen preset messages ──────────────────────────────────────────────
+  const [sendingPreset, setSendingPreset] = useState(false);
+  const sendCitizenPreset = useCallback(async (body: string) => {
+    if (!activeAlert || !user?.token || sendingPreset) return;
+    setSendingPreset(true);
+    try {
+      await api.sendCitizenMessage(user.token, activeAlert.id, body);
+    } catch { /* ignore */ }
+    finally { setSendingPreset(false); }
+  }, [activeAlert, user?.token, sendingPreset]);
 
   // ── SOS sheet content ────────────────────────────────────────────────────
   const isSheetOpen = sosFlow === "sheet";
@@ -270,7 +283,7 @@ export default function CitizenDashboard() {
                   <div className="w-2.5 h-2.5 rounded-full bg-white animate-pulse shrink-0" />
                   <div>
                     <p className="text-sm font-bold leading-tight">Alert sent — Police notified</p>
-                    <p className="text-xs text-amber-100 mt-0.5">Connecting to the nearest SSF unit…</p>
+                    <p className="text-xs text-amber-100 mt-0.5">Connecting to the nearest Police Patrol Vehicle…</p>
                   </div>
                 </div>
               </div>
@@ -283,7 +296,7 @@ export default function CitizenDashboard() {
                   <div className="w-2.5 h-2.5 rounded-full bg-white animate-pulse shrink-0" />
                   <div>
                     <p className="text-sm font-bold leading-tight">Police are reviewing your alert</p>
-                    <p className="text-xs text-blue-200 mt-0.5">Assigning nearest SSF patrol unit…</p>
+                    <p className="text-xs text-blue-200 mt-0.5">A Police Patrol Vehicle is being assigned to your location…</p>
                   </div>
                 </div>
               </div>
@@ -300,7 +313,7 @@ export default function CitizenDashboard() {
                       <CheckCircle2 className="w-5 h-5 text-white" />
                       <span className="text-white font-black text-base">Police is on the way</span>
                     </div>
-                    <p className="text-green-200 text-xs">{dispatchInfo.officerName} · SSF Unit {dispatchInfo.vehicleId} has been assigned to your alert</p>
+                    <p className="text-green-200 text-xs">{dispatchInfo.officerName} · Police Patrol Vehicle {dispatchInfo.vehicleId} has been assigned to your alert</p>
                   </div>
                   {/* ETA */}
                   <div className="px-5 py-4">
@@ -315,7 +328,7 @@ export default function CitizenDashboard() {
                     {activeAlert?.messages && activeAlert.messages.length > 0 && (
                       <div className="mt-3 space-y-1.5">
                         <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Updates from Officer</p>
-                        {activeAlert.messages.map(m => (
+                        {activeAlert.messages.filter(m => (m as any).sender_role !== "citizen").map(m => (
                           <div key={m.id} className="bg-surface-L2 rounded-xl px-3 py-2 text-sm text-text-primary flex justify-between items-start gap-2">
                             <span>{m.body}</span>
                             <span className="text-[10px] text-text-muted shrink-0">{relTime(m.created_at)}</span>
@@ -323,6 +336,23 @@ export default function CitizenDashboard() {
                         ))}
                       </div>
                     )}
+                    <div className="border-t border-border pt-3 mt-2">
+                      <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">
+                        Send Update to Officer
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {["I'm in trouble","I'm being harassed","I'm injured","I need immediate help",
+                          "I cannot speak","Please hurry","I'm hiding","I'm safe — still need help"
+                        ].map(msg => (
+                          <button key={msg} onClick={() => sendCitizenPreset(msg)} disabled={sendingPreset}
+                            className="text-[11px] font-semibold px-2.5 py-1 rounded-full
+                                       bg-green-500/15 border border-green-500/30 text-green-300
+                                       hover:bg-green-500/25 transition disabled:opacity-40 active:scale-95">
+                            {msg}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                   <div className="border-t border-border px-5 py-3">
                     <button onClick={handleCancelAlert}

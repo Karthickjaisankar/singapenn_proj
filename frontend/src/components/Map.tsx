@@ -123,13 +123,15 @@ function createVehicleIcon(id: number, status: string): L.DivIcon {
     ${responding ? `<circle cx="50" cy="20" r="8" fill="#ef4444" opacity=".95"/>
     <text x="50" y="24" text-anchor="middle" font-size="10" font-weight="900" fill="white">!</text>` : ""}
   </svg>`;
-  // Responding: add pulsing orange outer ring via box-shadow animation
+  // Responding: add pulsing outer ring
   const outerStyle = responding
     ? `width:54px;height:54px;border-radius:10px;display:flex;align-items:center;justify-content:center;animation:vehicle-dispatch-pulse 1.2s ease-in-out infinite;`
     : `width:54px;height:54px;border-radius:10px;display:flex;align-items:center;justify-content:center;`;
   const innerStyle = `width:46px;height:46px;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,0.9);border:2.5px solid ${color};border-radius:8px;box-shadow:0 4px 14px ${color}55`;
+  // Siren: two alternating red/blue dots at top-center of the icon
+  const sirenHtml = `<style>@keyframes sr{0%,49%{opacity:1}50%,100%{opacity:0}}@keyframes sb{0%,49%{opacity:0}50%,100%{opacity:1}}</style><div style="position:absolute;top:1px;left:50%;transform:translateX(-50%);display:flex;gap:3px;z-index:2;"><div style="width:5px;height:5px;border-radius:50%;background:#ef4444;box-shadow:0 0 5px #ef4444;animation:sr 0.8s step-end infinite;"></div><div style="width:5px;height:5px;border-radius:50%;background:#3b82f6;box-shadow:0 0 5px #3b82f6;animation:sb 0.8s step-end infinite;"></div></div>`;
   return L.divIcon({
-    html: `<div style="${outerStyle}"><div style="${innerStyle}">${svg}</div></div>`,
+    html: `<div style="${outerStyle};position:relative;">${sirenHtml}<div style="${innerStyle}">${svg}</div></div>`,
     className: "",
     iconSize: [54, 54],
     iconAnchor: [27, 27],
@@ -150,12 +152,13 @@ interface MapProps {
   onVehicleReached?: (vehicleId: number) => void;
   hideCrimes?: boolean;
   venueZoomThreshold?: number;
+  token?: string;
 }
 
 export default function Map({
   crimes, hotspots, vehicles, venues, isLoading, activeAlerts, liveAlertLocations,
   selectedAlertId, onResetView, vehicleAssignments, onVehicleReached,
-  hideCrimes, venueZoomThreshold,
+  hideCrimes, venueZoomThreshold, token,
 }: MapProps) {
   const mapEl  = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -184,6 +187,8 @@ export default function Map({
   const [showVenues, setShowVenues]   = useState(true);
   const [showAlerts, setShowAlerts]   = useState(true);
   const [showHeatmap, setShowHeatmap] = useState(false);
+  const [showTrails, setShowTrails]   = useState(false);
+  const trailLayersRef = useRef<Record<number, L.Polyline>>({});
 
   useEffect(() => { showVenuesRef.current = showVenues; }, [showVenues]);
   useEffect(() => { onVehicleReachedRef.current = onVehicleReached; }, [onVehicleReached]);
@@ -492,6 +497,34 @@ export default function Map({
     }
   }, [crimes, hotspots, venues, mode, showVenues, showAlerts, showHeatmap, activeAlerts, liveAlertLocations, hideCrimes]);
 
+  // ── Effect: Patrol trails (spaghetti view) ────────────────────────────────
+  useEffect(() => {
+    const m = mapRef.current;
+    if (!m) return;
+    // Remove existing trail polylines
+    Object.values(trailLayersRef.current).forEach(l => m.removeLayer(l));
+    trailLayersRef.current = {};
+    if (!showTrails || !token) return;
+    const API_BASE = import.meta.env.VITE_API_URL ?? "";
+    fetch(`${API_BASE}/api/patrol/all-tracks`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.json())
+      .then(({ tracks }: { tracks: Record<number, { lat: number; lng: number }[]> }) => {
+        Object.entries(tracks).forEach(([vidStr, pts]) => {
+          const vid = Number(vidStr);
+          const latlngs: [number, number][] = pts.map(p => [p.lat, p.lng]);
+          if (latlngs.length < 2) return;
+          trailLayersRef.current[vid] = L.polyline(latlngs, {
+            color: VEHICLE_COLORS[vid] ?? "#ec4899",
+            weight: 2,
+            opacity: 0.65,
+          }).addTo(m);
+        });
+      })
+      .catch(() => {});
+  }, [showTrails, token]);
+
   // ── Effect 3: "I'm here" pin for selected alert (no aggressive zoom) ─────
   useEffect(() => {
     // Always remove old pin first
@@ -573,7 +606,7 @@ export default function Map({
       });
       mk.bindPopup(
         `<div style="font-size:12px;min-width:200px">
-          <div style="font-weight:700;color:${vehicleColor(v.id)};font-size:13px">SSF-${v.id}</div>
+          <div style="font-weight:700;color:${vehicleColor(v.id)};font-size:13px">PPV-${v.id}</div>
           <div style="color:#475569;font-size:11px;margin-top:4px;line-height:1.6">
             <div><b>Status:</b> <span style="text-transform:capitalize;font-weight:600">${v.status}</span></div>
             <div><b>Zone:</b> ${v.zone_id}</div>
@@ -845,6 +878,7 @@ export default function Map({
               { label: "Heatmap", value: showHeatmap, set: setShowHeatmap, onlyInCrimes: true },
               { label: `Venues (zoom ${venueZoomThresholdRef.current}+)`, value: showVenues,  set: setShowVenues,  onlyInCrimes: false },
               { label: "Alerts",  value: showAlerts,  set: setShowAlerts,  onlyInCrimes: false },
+              { label: "Patrol Trails", value: showTrails, set: setShowTrails, onlyInCrimes: false },
             ] as const).map(({ label, value, set, onlyInCrimes }) => (
               (!onlyInCrimes || mode === "crimes") && (
                 <label key={label} className="flex items-center gap-2 cursor-pointer text-xs text-text-secondary hover:text-text-primary transition">
@@ -911,7 +945,7 @@ export default function Map({
                 className="w-3 h-3 rounded-sm shrink-0"
                 style={{ background: vehicleColor(id), boxShadow: `0 0 5px ${vehicleColor(id)}88` }}
               />
-              <span className="text-[11px] text-text-secondary">SSF-{id}</span>
+              <span className="text-[11px] text-text-secondary">PPV-{id}</span>
             </div>
           ))}
           <div className="flex items-center gap-2">
@@ -919,6 +953,20 @@ export default function Map({
             <span className="text-[11px] text-text-secondary">SOS Alert</span>
           </div>
         </div>
+
+        {showTrails && (
+          <div className="mt-2 pt-2 border-t border-border">
+            <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1.5">Patrol Trails</p>
+            <div className="space-y-1">
+              {([1, 2, 3, 4] as const).map(id => (
+                <div key={id} className="flex items-center gap-2">
+                  <div className="w-7 h-1.5 rounded-full shrink-0" style={{ background: vehicleColor(id), opacity: 0.7 }} />
+                  <span className="text-[11px] text-text-secondary">PPV-{id} today</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {showVenues && (
           <div className="mt-2 pt-2 border-t border-border">

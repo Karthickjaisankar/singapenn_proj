@@ -76,8 +76,20 @@ export default function LoginPage() {
       <div className="relative w-full max-w-sm">
         {/* Logo + title */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-600 mb-4 shadow-lg">
-            <Shield className="w-8 h-8 text-white" />
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-transparent mb-4">
+            <img
+              src="/singapenne-logo.png"
+              alt="Singapenne"
+              className="w-full h-full object-contain"
+              onError={(e) => {
+                const el = e.currentTarget;
+                el.style.display = "none";
+                (el.nextElementSibling as HTMLElement | null)?.removeAttribute("style");
+              }}
+            />
+            <div className="w-16 h-16 rounded-2xl bg-blue-600 shadow-lg flex items-center justify-center" style={{ display: "none" }}>
+              <Shield className="w-8 h-8 text-white" />
+            </div>
           </div>
           <h1 className="text-2xl font-black text-text-primary tracking-tight">Singapenne Scheme</h1>
           <p className="text-sm text-text-muted mt-1">சிங்கப்பெண் சிறப்பு அதிரடிப்படை</p>

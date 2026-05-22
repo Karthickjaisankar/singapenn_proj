@@ -1,7 +1,7 @@
 import {
   Crime, PatrolZone, PatrolVehicle, Venue, Stats, Meta, RoutingResponse,
   IncidentReport, PatrolAnomalyResponse, ReportingGapStats, FoPVolunteer,
-  AlertMessage, CommissionerSummary,
+  AlertMessage, CommissionerSummary, PatrolTrackPoint,
 } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
@@ -124,8 +124,16 @@ export const api = {
     put<{ alert: any }>(`/api/alerts/${id}/accept`, {}, token),
   sendPatrolMessage: (token: string, alertId: number, body: string) =>
     post<{ message: AlertMessage }>(`/api/alerts/${alertId}/message`, { body }, token),
+  sendCitizenMessage: (token: string, alertId: number, body: string) =>
+    post<{ message: AlertMessage }>(`/api/alerts/${alertId}/message`, { body }, token),
   getAlertMessages: (token: string, alertId: number) =>
     get<{ messages: AlertMessage[] }>(`/api/alerts/${alertId}/messages`, token),
+  patrolArrive: (token: string, alertId: number) =>
+    put<{ alert: any }>(`/api/alerts/${alertId}/arrive`, {}, token),
+  patrolFileReport: (token: string, alertId: number, report_type: string, report_notes: string) =>
+    put<{ alert: any }>(`/api/alerts/${alertId}/file-report`, { report_type, report_notes }, token),
+  allPatrolTracks: (token: string) =>
+    get<{ tracks: Record<number, PatrolTrackPoint[]> }>("/api/patrol/all-tracks", token),
 
   // Friend of Police
   registerFoP: (token: string, area?: string) =>

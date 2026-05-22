@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { LogOut, MapPin, Phone, MessageCircle, CheckCircle, Send, Wifi, WifiOff } from "lucide-react";
+import { LogOut, MapPin, Phone, MessageCircle, CheckCircle, Send, Wifi, WifiOff, Clock, FileText } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { usePatrolAlerts } from "../hooks/usePatrolAlerts";
 import { api } from "../api";
@@ -51,12 +51,24 @@ export default function PatrolDashboard() {
   const [customMsg, setCustomMsg] = useState("");
   const [sending, setSending] = useState(false);
   const [accepting, setAccepting] = useState(false);
+  const [arriving, setArriving] = useState(false);
+  const [reportType, setReportType] = useState<"DSR" | "CSR" | null>(null);
+  const [reportNotes, setReportNotes] = useState("");
+  const [filingReport, setFilingReport] = useState(false);
+  const [dispatchedAt] = useState<Date>(new Date());
+  const [elapsed, setElapsed] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Sync messages from alert
   useEffect(() => {
     if (myAlert?.messages) setMessages(myAlert.messages);
   }, [myAlert?.messages]);
+
+  // Elapsed timer since dispatch
+  useEffect(() => {
+    const id = setInterval(() => setElapsed(Math.floor((Date.now() - dispatchedAt.getTime()) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [dispatchedAt]);
 
   // Scroll to latest message
   useEffect(() => {
@@ -75,6 +87,30 @@ export default function PatrolDashboard() {
     }
   };
 
+  const handleArrive = async () => {
+    if (!myAlert || !user?.token) return;
+    setArriving(true);
+    try {
+      await api.patrolArrive(user.token, myAlert.id);
+    } catch {
+      // WS will update state
+    } finally {
+      setArriving(false);
+    }
+  };
+
+  const handleFileReport = async () => {
+    if (!myAlert || !user?.token || !reportType) return;
+    setFilingReport(true);
+    try {
+      await api.patrolFileReport(user.token, myAlert.id, reportType, reportNotes);
+    } catch {
+      // WS will update state
+    } finally {
+      setFilingReport(false);
+    }
+  };
+
   const sendMessage = async (body: string) => {
     if (!myAlert || !user?.token || !body.trim()) return;
     setSending(true);
@@ -90,6 +126,7 @@ export default function PatrolDashboard() {
   };
 
   const isAccepted = myAlert?.status === "acknowledged";
+  const isOnScene  = myAlert?.status === "on_scene";
   // "incoming" = dispatched but patrol hasn't accepted (acknowledged) yet
   const isIncoming = myAlert && myAlert.status === "dispatched";
 
@@ -101,7 +138,7 @@ export default function PatrolDashboard() {
           {vehicleId}
         </div>
         <div>
-          <p className="text-sm font-black text-white leading-none">SSF-{vehicleId} · Patrol</p>
+          <p className="text-sm font-black text-white leading-none">PPV-{vehicleId} · Patrol</p>
           <p className="text-[10px] text-slate-500 mt-0.5">{user?.full_name}</p>
         </div>
         <div className="flex-1" />
@@ -130,7 +167,7 @@ export default function PatrolDashboard() {
             </div>
             <p className="text-white font-bold text-base">On Duty · Standby</p>
             <p className="text-slate-500 text-sm mt-1">No active dispatch</p>
-            <p className="text-slate-600 text-xs mt-0.5">Monitoring zone for SSF-{vehicleId}</p>
+            <p className="text-slate-600 text-xs mt-0.5">Monitoring zone for PPV-{vehicleId}</p>
           </div>
         )}
 
@@ -173,7 +210,7 @@ export default function PatrolDashboard() {
         )}
 
         {/* ─── Active / Accepted assignment ─── */}
-        {myAlert && isAccepted && (
+        {myAlert && (isAccepted || isOnScene) && (
           <>
             {/* Citizen details card */}
             <div className="rounded-2xl border border-[#2e3347] bg-[#1a1d27] p-4 space-y-3">
@@ -181,9 +218,22 @@ export default function PatrolDashboard() {
                 <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${SEVERITY_BADGE[myAlert.alert_type]}`}>
                   {ALERT_TYPE_LABELS[myAlert.alert_type] ?? myAlert.alert_type.toUpperCase()}
                 </span>
-                <span className="text-[10px] bg-green-500/15 text-green-400 border border-green-500/30 px-2 py-0.5 rounded-full font-semibold">
-                  ✓ Accepted
-                </span>
+                <div className="flex items-center gap-2">
+                  {isOnScene && (
+                    <span className="text-[10px] bg-amber-500/15 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-full font-semibold">
+                      ● On Scene
+                    </span>
+                  )}
+                  {isAccepted && (
+                    <span className="text-[10px] bg-green-500/15 text-green-400 border border-green-500/30 px-2 py-0.5 rounded-full font-semibold">
+                      ✓ Accepted
+                    </span>
+                  )}
+                  <div className="flex items-center gap-1 text-[10px] text-slate-500">
+                    <Clock className="w-3 h-3" />
+                    <span>{Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, "0")}</span>
+                  </div>
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -192,8 +242,10 @@ export default function PatrolDashboard() {
                     👤
                   </div>
                   <div>
-                    <p className="text-white text-sm font-semibold">Citizen #{myAlert.citizen_id}</p>
-                    <p className="text-slate-500 text-xs">Ananya / Meena / Deepa</p>
+                    <p className="text-white text-sm font-semibold">
+                      {(myAlert as any).citizen_name ?? `Citizen #${myAlert.citizen_id}`}
+                    </p>
+                    <p className="text-slate-500 text-xs">Citizen #{myAlert.citizen_id}</p>
                   </div>
                 </div>
 
@@ -226,12 +278,88 @@ export default function PatrolDashboard() {
                   <MapPin className="w-3 h-3" /> Open in Google Maps ↗
                 </a>
               </div>
+
+              {/* I've Arrived button — only when accepted, not yet on scene */}
+              {isAccepted && (
+                <button
+                  onClick={handleArrive}
+                  disabled={arriving}
+                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 active:scale-95 text-white font-bold text-sm rounded-xl transition disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {arriving ? (
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <MapPin className="w-4 h-4" />
+                  )}
+                  I've Arrived at Location
+                </button>
+              )}
             </div>
+
+            {/* ─── On Scene: DSR/CSR Report Form ─── */}
+            {isOnScene && (
+              <div className="rounded-2xl border-2 border-amber-500/40 bg-amber-500/5 p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-amber-400" />
+                  <p className="text-amber-400 font-bold text-sm">On Scene — File Incident Report</p>
+                </div>
+
+                <div className="bg-[#22263a] rounded-xl p-3 space-y-1.5 text-xs text-slate-400">
+                  <p><span className="text-blue-400 font-bold">DSR</span> — Daily Situation Report: Routine patrol, no crime found</p>
+                  <p><span className="text-red-400 font-bold">CSR</span> — Crime Scene Report: Crime confirmed, FIR to be filed</p>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setReportType("DSR")}
+                    className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition border ${
+                      reportType === "DSR"
+                        ? "bg-blue-600 border-blue-500 text-white"
+                        : "bg-[#22263a] border-[#2e3347] text-slate-400 hover:border-blue-500/50"
+                    }`}
+                  >
+                    DSR
+                  </button>
+                  <button
+                    onClick={() => setReportType("CSR")}
+                    className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition border ${
+                      reportType === "CSR"
+                        ? "bg-red-600 border-red-500 text-white"
+                        : "bg-[#22263a] border-[#2e3347] text-slate-400 hover:border-red-500/50"
+                    }`}
+                  >
+                    CSR
+                  </button>
+                </div>
+
+                <textarea
+                  value={reportNotes}
+                  onChange={e => setReportNotes(e.target.value.slice(0, 500))}
+                  placeholder="Notes (situation description, action taken…)"
+                  rows={3}
+                  className="w-full bg-[#22263a] border border-[#2e3347] text-white text-sm rounded-xl px-3 py-2 placeholder-slate-600 focus:outline-none focus:border-amber-500/60 resize-none"
+                />
+                <p className="text-[10px] text-slate-600 text-right -mt-1">{reportNotes.length}/500</p>
+
+                <button
+                  onClick={handleFileReport}
+                  disabled={!reportType || filingReport}
+                  className="w-full py-3 bg-green-600 hover:bg-green-500 active:scale-95 text-white font-bold text-sm rounded-xl transition disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {filingReport ? (
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <CheckCircle className="w-4 h-4" />
+                  )}
+                  Submit & Close Case
+                </button>
+              </div>
+            )}
 
             {/* Message thread */}
             <div className="rounded-2xl border border-[#2e3347] bg-[#1a1d27] p-4 space-y-3">
               <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-widest">
-                <MessageCircle className="w-3.5 h-3.5" /> Updates to Citizen
+                <MessageCircle className="w-3.5 h-3.5" /> Citizen Communication
               </div>
 
               {/* Message list */}
@@ -239,14 +367,26 @@ export default function PatrolDashboard() {
                 {messages.length === 0 && (
                   <p className="text-slate-600 text-xs text-center py-3">No messages yet</p>
                 )}
-                {messages.map(m => (
-                  <div key={m.id} className="flex justify-end">
-                    <div className="bg-blue-600 text-white text-sm px-3 py-1.5 rounded-2xl rounded-tr-sm max-w-[80%]">
-                      <p>{m.body}</p>
-                      <p className="text-[10px] text-blue-200 mt-0.5 text-right">{timeAgo(m.created_at)}</p>
+                {messages.map(m => {
+                  const isPatrolMsg = (m as any).sender_role !== "citizen";
+                  return (
+                    <div key={m.id} className={`flex ${isPatrolMsg ? "justify-end" : "justify-start"}`}>
+                      <div className={`text-sm px-3 py-1.5 rounded-2xl max-w-[80%] ${
+                        isPatrolMsg
+                          ? "bg-blue-600 text-white rounded-tr-sm"
+                          : "bg-green-600/20 border border-green-500/30 text-green-200 rounded-tl-sm"
+                      }`}>
+                        {!isPatrolMsg && (
+                          <p className="text-[9px] text-green-400 font-bold mb-0.5 uppercase">Citizen</p>
+                        )}
+                        <p>{m.body}</p>
+                        <p className={`text-[10px] mt-0.5 ${isPatrolMsg ? "text-blue-200 text-right" : "text-green-400"}`}>
+                          {timeAgo(m.created_at)}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 <div ref={messagesEndRef} />
               </div>
 

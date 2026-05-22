@@ -81,7 +81,7 @@ export interface Stats {
 export type TimeSlot = "all" | "morning" | "afternoon" | "night";
 
 export type AlertType = "sos" | "harassment" | "suspicious" | "medical" | "other";
-export type AlertStatus = "pending" | "acknowledged" | "dispatched" | "resolved" | "cancelled";
+export type AlertStatus = "pending" | "acknowledged" | "dispatched" | "on_scene" | "resolved" | "cancelled";
 
 export interface AlertMessage {
   id: number;
@@ -104,6 +104,7 @@ export interface CommissionerSummary {
 export interface AlertRow {
   id: number;
   citizen_id: number;
+  citizen_name?: string | null;
   alert_type: AlertType;
   description: string | null;
   lat: number;
@@ -113,10 +114,20 @@ export interface AlertRow {
   acknowledged_by: number | null;
   resolved_by: number | null;
   eta_minutes: number | null;
+  report_type?: "DSR" | "CSR" | null;
+  report_notes?: string | null;
   created_at: string;
   updated_at: string;
   resolved_at: string | null;
   messages?: AlertMessage[];
+}
+
+export interface PatrolTrackPoint {
+  vehicle_id: number;
+  lat: number;
+  lng: number;
+  status: string;
+  recorded_at: string;
 }
 
 export interface WSMessage {

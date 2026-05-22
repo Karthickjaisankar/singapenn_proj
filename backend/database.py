@@ -39,11 +39,13 @@ def init_db():
             lat                   REAL NOT NULL,
             lng                   REAL NOT NULL,
             status                TEXT NOT NULL DEFAULT 'pending'
-                                  CHECK(status IN ('pending','acknowledged','dispatched','resolved','cancelled')),
+                                  CHECK(status IN ('pending','acknowledged','dispatched','on_scene','resolved','cancelled')),
             dispatched_vehicle_id INTEGER,
             acknowledged_by       INTEGER REFERENCES users(id),
             resolved_by           INTEGER REFERENCES users(id),
             eta_minutes           INTEGER,
+            report_type           TEXT CHECK(report_type IN ('DSR','CSR')) DEFAULT NULL,
+            report_notes          TEXT DEFAULT NULL,
             created_at            TEXT DEFAULT (datetime('now')),
             updated_at            TEXT DEFAULT (datetime('now')),
             resolved_at           TEXT
@@ -165,6 +167,7 @@ def _seed_default_users(conn: sqlite3.Connection):
     )
     conn.commit()
     _seed_demo_alerts(conn)
+    _seed_demo_telemetry(conn)
 
 
 def _seed_demo_alerts(conn: sqlite3.Connection):
@@ -196,6 +199,44 @@ def _seed_demo_alerts(conn: sqlite3.Connection):
            (citizen_id, alert_type, description, lat, lng, status, dispatched_vehicle_id, eta_minutes)
            VALUES (?,?,?,?,?,?,?,?)""",
         alerts,
+    )
+    conn.commit()
+
+
+def _seed_demo_telemetry(conn: sqlite3.Connection):
+    """Seed 8 hours of synthetic patrol circuits for all 4 vehicles (demo use)."""
+    import math
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM patrol_telemetry")
+    if cursor.fetchone()[0] > 0:
+        return
+
+    # Zone centroids for each PPV (Tambaram sub-division AWPS zones)
+    CIRCUITS = {
+        1: (12.9398, 80.1323),
+        2: (12.9657, 80.1588),
+        3: (12.9314, 80.1496),
+        4: (12.9344, 80.2120),
+    }
+    now = datetime.utcnow()
+    rows = []
+    for vid, (clat, clng) in CIRCUITS.items():
+        R_lat = 0.006   # ~660m north-south
+        R_lng = 0.008   # ~700m east-west (slightly wider oval)
+        steps = 160     # 3-min intervals × 160 = 8 hours
+        for step in range(steps):
+            minutes_ago = (steps - step) * 3
+            from datetime import timedelta
+            t = now - timedelta(minutes=minutes_ago)
+            angle = (step / steps) * 2 * math.pi + (vid * math.pi / 2)
+            lat = round(clat + R_lat * math.sin(angle), 6)
+            lng = round(clng + R_lng * math.cos(angle), 6)
+            rows.append((vid, lat, lng, "patrolling", 0.05,
+                         t.strftime("%Y-%m-%d %H:%M:%S")))
+
+    cursor.executemany(
+        "INSERT INTO patrol_telemetry (vehicle_id, lat, lng, status, km_delta, recorded_at) VALUES (?,?,?,?,?,?)",
+        rows
     )
     conn.commit()
 
@@ -266,14 +307,17 @@ def create_alert(citizen_id: int, alert_type: str, description: Optional[str], l
     return get_alert_by_id(alert_id)
 
 def get_alert_by_id(alert_id: int) -> Optional[dict]:
-    """Get alert by ID."""
+    """Get alert by ID, including citizen name from users JOIN."""
     conn = get_conn()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT id, citizen_id, alert_type, description, lat, lng, status,
-               dispatched_vehicle_id, acknowledged_by, resolved_by, eta_minutes,
-               created_at, updated_at, resolved_at
-        FROM alerts WHERE id = ?
+        SELECT alerts.id, alerts.citizen_id, u.full_name AS citizen_name,
+               alerts.alert_type, alerts.description, alerts.lat, alerts.lng, alerts.status,
+               alerts.dispatched_vehicle_id, alerts.acknowledged_by, alerts.resolved_by,
+               alerts.eta_minutes, alerts.report_type, alerts.report_notes,
+               alerts.created_at, alerts.updated_at, alerts.resolved_at
+        FROM alerts LEFT JOIN users u ON alerts.citizen_id = u.id
+        WHERE alerts.id = ?
     """, (alert_id,))
     row = cursor.fetchone()
     conn.close()
@@ -284,10 +328,13 @@ def get_alerts_for_citizen(citizen_id: int) -> list[dict]:
     conn = get_conn()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT id, citizen_id, alert_type, description, lat, lng, status,
-               dispatched_vehicle_id, acknowledged_by, resolved_by, eta_minutes,
-               created_at, updated_at, resolved_at
-        FROM alerts WHERE citizen_id = ? ORDER BY id DESC
+        SELECT alerts.id, alerts.citizen_id, u.full_name AS citizen_name,
+               alerts.alert_type, alerts.description, alerts.lat, alerts.lng, alerts.status,
+               alerts.dispatched_vehicle_id, alerts.acknowledged_by, alerts.resolved_by,
+               alerts.eta_minutes, alerts.report_type, alerts.report_notes,
+               alerts.created_at, alerts.updated_at, alerts.resolved_at
+        FROM alerts LEFT JOIN users u ON alerts.citizen_id = u.id
+        WHERE alerts.citizen_id = ? ORDER BY alerts.id DESC
     """, (citizen_id,))
     alerts = [dict(row) for row in cursor.fetchall()]
 
@@ -320,20 +367,26 @@ def get_all_alerts(limit: int = 100, offset: int = 0, status_filter: Optional[st
         cursor.execute("SELECT COUNT(*) FROM alerts")
     total = cursor.fetchone()[0]
 
-    # Fetch paginated
+    # Fetch paginated with citizen name JOIN
     if status_filter:
         cursor.execute("""
-            SELECT id, citizen_id, alert_type, description, lat, lng, status,
-                   dispatched_vehicle_id, acknowledged_by, resolved_by, eta_minutes,
-                   created_at, updated_at, resolved_at
-            FROM alerts WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
+            SELECT alerts.id, alerts.citizen_id, u.full_name AS citizen_name,
+                   alerts.alert_type, alerts.description, alerts.lat, alerts.lng, alerts.status,
+                   alerts.dispatched_vehicle_id, alerts.acknowledged_by, alerts.resolved_by,
+                   alerts.eta_minutes, alerts.report_type, alerts.report_notes,
+                   alerts.created_at, alerts.updated_at, alerts.resolved_at
+            FROM alerts LEFT JOIN users u ON alerts.citizen_id = u.id
+            WHERE alerts.status = ? ORDER BY alerts.created_at DESC LIMIT ? OFFSET ?
         """, (status_filter, limit, offset))
     else:
         cursor.execute("""
-            SELECT id, citizen_id, alert_type, description, lat, lng, status,
-                   dispatched_vehicle_id, acknowledged_by, resolved_by, eta_minutes,
-                   created_at, updated_at, resolved_at
-            FROM alerts ORDER BY created_at DESC LIMIT ? OFFSET ?
+            SELECT alerts.id, alerts.citizen_id, u.full_name AS citizen_name,
+                   alerts.alert_type, alerts.description, alerts.lat, alerts.lng, alerts.status,
+                   alerts.dispatched_vehicle_id, alerts.acknowledged_by, alerts.resolved_by,
+                   alerts.eta_minutes, alerts.report_type, alerts.report_notes,
+                   alerts.created_at, alerts.updated_at, alerts.resolved_at
+            FROM alerts LEFT JOIN users u ON alerts.citizen_id = u.id
+            ORDER BY alerts.created_at DESC LIMIT ? OFFSET ?
         """, (limit, offset))
 
     rows = cursor.fetchall()
@@ -380,6 +433,19 @@ def update_alert_status(
 
     return get_alert_by_id(alert_id)
 
+
+def update_alert_report(alert_id: int, report_type: str, report_notes: str) -> Optional[dict]:
+    """File a DSR or CSR report, auto-resolving the alert."""
+    conn = get_conn()
+    conn.execute(
+        "UPDATE alerts SET report_type=?, report_notes=?, status='resolved', "
+        "resolved_at=datetime('now'), updated_at=datetime('now') WHERE id=?",
+        (report_type, report_notes, alert_id),
+    )
+    conn.commit()
+    conn.close()
+    return get_alert_by_id(alert_id)
+
 # ============ Alert Messages ============
 
 def create_alert_message(alert_id: int, sender_id: int, sender_role: str, body: str) -> dict:
@@ -416,7 +482,7 @@ def get_live_alert_summary() -> dict:
           COUNT(*)                                                                      AS total,
           SUM(CASE WHEN status='resolved' AND date(resolved_at)=date('now') THEN 1 ELSE 0 END) AS resolved_today,
           SUM(CASE WHEN status='pending'    THEN 1 ELSE 0 END)                          AS pending,
-          SUM(CASE WHEN status='dispatched' THEN 1 ELSE 0 END)                          AS dispatched,
+          SUM(CASE WHEN status IN ('dispatched','on_scene') THEN 1 ELSE 0 END)           AS dispatched,
           AVG(CASE WHEN eta_minutes IS NOT NULL THEN eta_minutes END)                   AS avg_eta
         FROM alerts
         WHERE date(created_at) = date('now')
@@ -489,6 +555,22 @@ def get_patrol_telemetry(vehicle_id: int, since_minutes: int = 480) -> list[dict
     rows = cursor.fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def get_all_patrol_tracks_today() -> dict:
+    """Return today's telemetry for all 4 patrol vehicles, keyed by vehicle_id."""
+    conn = get_conn()
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    rows = conn.execute(
+        "SELECT vehicle_id, lat, lng, status, recorded_at FROM patrol_telemetry "
+        "WHERE DATE(recorded_at) = ? ORDER BY vehicle_id, recorded_at ASC",
+        (today,)
+    ).fetchall()
+    conn.close()
+    result: dict = {}
+    for r in rows:
+        result.setdefault(r["vehicle_id"], []).append(dict(r))
+    return result
 
 
 def get_stationary_alerts(threshold_minutes: int = 120) -> list[dict]:

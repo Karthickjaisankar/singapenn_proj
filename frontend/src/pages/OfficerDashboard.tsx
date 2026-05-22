@@ -286,7 +286,7 @@ function StatsPanel({
                       style={{ background: idColor, boxShadow: `0 0 4px ${idColor}88` }}
                     />
                     <div className="min-w-0">
-                      <p className="text-[10px] font-bold leading-none" style={{ color: idColor }}>SSF-{v.id}</p>
+                      <p className="text-[10px] font-bold leading-none" style={{ color: idColor }}>PPV-{v.id}</p>
                       <p className="text-[9px] capitalize mt-0.5" style={{ color: sc }}>{v.status}</p>
                     </div>
                   </div>
@@ -428,6 +428,7 @@ function ComplaintDetail({
       <div className="space-y-1.5">
         <Row label="Alert type"  value={alert.alert_type.toUpperCase()} />
         <Row label="Phone"       value={phone} />
+        <Row label="Citizen"     value={alert.citizen_name ?? `#${alert.citizen_id}`} />
         <Row label="Citizen ID"  value={`#${alert.citizen_id}`} />
         <Row label="Status"      value={alert.status} capitalize />
         <Row label="Case type"   value={ct.label} />
@@ -435,6 +436,8 @@ function ComplaintDetail({
         <Row label="Raised"      value={toUtcDate(alert.created_at).toLocaleString("en-IN")} />
         {alert.description && <Row label="Description" value={alert.description} />}
         {alert.eta_minutes && <Row label="ETA" value={`${alert.eta_minutes} min`} />}
+        {alert.report_type && <Row label="Report type" value={alert.report_type} />}
+        {alert.report_notes && <Row label="Report notes" value={alert.report_notes} />}
       </div>
 
       {/* Legal reason */}
@@ -468,7 +471,7 @@ function ComplaintDetail({
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[11px] font-bold text-text-primary">SSF-{v.id}</span>
+                    <span className="text-[11px] font-bold text-text-primary">PPV-{v.id}</span>
                     {i === 0 && !isAssigned && (
                       <span className="text-[9px] px-1 rounded bg-green-500/15 text-green-400 font-bold">
                         NEAREST
@@ -536,7 +539,7 @@ function ComplaintDetail({
         {effectiveAssigned !== null && !isReached && (
           <div className="mt-2.5 flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-500/10 border border-blue-500/30">
             <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse shrink-0" />
-            <span className="text-xs font-semibold text-blue-400">SSF-{effectiveAssigned} en route…</span>
+            <span className="text-xs font-semibold text-blue-400">PPV-{effectiveAssigned} en route…</span>
           </div>
         )}
       </div>
@@ -636,6 +639,7 @@ function ComplaintsFeed({
           const statusColor =
             alert.status === "pending"    ? "#ef4444" :
             alert.status === "dispatched" ? "#3b82f6" :
+            alert.status === "on_scene"   ? "#f59e0b" :
             alert.status === "resolved"   ? "#22c55e" : "#94a3b8";
 
           // Dispatch / on-scene badge for this row
@@ -673,14 +677,24 @@ function ComplaintsFeed({
                         Today
                       </span>
                     )}
-                    {rowReached && (
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-green-500/15 text-green-400 border border-green-500/20">
-                        On Scene ✓
+                    {(rowReached || alert.status === "on_scene") && (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/20">
+                        On Scene ●
                       </span>
                     )}
-                    {rowDispVid !== null && !rowReached && (
+                    {alert.report_type === "DSR" && (
                       <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/20">
-                        SSF-{rowDispVid} En Route
+                        DSR
+                      </span>
+                    )}
+                    {alert.report_type === "CSR" && (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 border border-red-500/20">
+                        CSR
+                      </span>
+                    )}
+                    {rowDispVid !== null && !rowReached && alert.status !== "on_scene" && (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/20">
+                        PPV-{rowDispVid} En Route
                       </span>
                     )}
                     {alert.status === "pending" && rowDispVid === null && (
@@ -694,8 +708,11 @@ function ComplaintsFeed({
                     <ElapsedTimer iso={alert.created_at} />
                     <span className="text-[10px] text-text-muted/40">·</span>
                     <span className="text-[10px] font-semibold capitalize" style={{ color: statusColor }}>
-                      {alert.status}
+                      {alert.status === "on_scene" ? "on scene" : alert.status}
                     </span>
+                    {alert.citizen_name && (
+                      <span className="text-[10px] text-text-muted">· {alert.citizen_name}</span>
+                    )}
                     <span className="text-[10px] text-text-muted/40 ml-auto">#{alert.id}</span>
                   </div>
                 </div>
@@ -883,6 +900,8 @@ export default function OfficerDashboard() {
       {/* ── Slim header ── */}
       <div className="bg-surface-L1 border-b border-border px-4 py-2 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
+          <img src="/singapenne-logo.png" alt="" className="h-7 w-7 object-contain"
+               onError={e => (e.currentTarget.style.display = "none")} />
           <div>
             <p className="text-sm font-black text-text-primary leading-none">Singapenne · Command Centre</p>
             <p className="text-[10px] text-text-muted mt-0.5">{user?.full_name ?? "Command Centre Officer"}</p>
@@ -972,6 +991,7 @@ export default function OfficerDashboard() {
               onResetView={() => setSelectedAlertId(null)}
               vehicleAssignments={vehicleAssignments}
               onVehicleReached={handleVehicleReached}
+              token={user?.token}
             />
           </div>
 
@@ -997,6 +1017,7 @@ export default function OfficerDashboard() {
             patrolZones={hotspots}
             vehicles={displayVehicles}
             activeAlerts={alerts.filter(a => !["resolved", "cancelled"].includes(a.status))}
+            token={user?.token}
           />
         </div>
       )}
