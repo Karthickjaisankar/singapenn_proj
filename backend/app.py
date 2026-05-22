@@ -991,6 +991,31 @@ async def accept_alert(alert_id: int, current_user: dict = Depends(require_patro
     return {"alert": updated}
 
 
+@app.put("/api/alerts/{alert_id}/reject")
+async def reject_alert(alert_id: int, request: dict, current_user: dict = Depends(require_patrol)):
+    """Patrol officer rejects a dispatched alert with a reason; alert returns to pending."""
+    alert = get_alert_by_id(alert_id)
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    if alert.get("dispatched_vehicle_id") != current_user.get("vehicle_id"):
+        raise HTTPException(status_code=403, detail="This alert is not assigned to your vehicle")
+    reason = (request.get("reason") or "").strip()
+    if not reason:
+        raise HTTPException(status_code=400, detail="Rejection reason required")
+    conn = get_conn()
+    conn.execute(
+        "UPDATE alerts SET status='pending', dispatched_vehicle_id=NULL, acknowledged_by=NULL, "
+        "updated_at=datetime('now') WHERE id=?",
+        (alert_id,),
+    )
+    conn.commit()
+    conn.close()
+    create_alert_message(alert_id, current_user["user_id"], "patrol", f"[REJECTED] {reason}")
+    updated = get_alert_by_id(alert_id)
+    await ws_manager.broadcast({"type": "alert_updated", "alert": updated})
+    return {"alert": updated}
+
+
 @app.post("/api/alerts/{alert_id}/message")
 async def send_alert_message(alert_id: int, request: dict, current_user: dict = Depends(get_current_user)):
     """Patrol officer or citizen sends a message on their alert."""

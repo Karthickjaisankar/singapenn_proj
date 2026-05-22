@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { AlertRow, WSMessage } from "../types";
 
 export function usePatrolAlerts(token: string, vehicleId: number) {
+  // Queue: dispatched alerts waiting for patrol to accept/reject
+  const [alertQueue, setAlertQueue] = useState<AlertRow[]>([]);
+  // Active: the alert that is acknowledged or on_scene
   const [myAlert, setMyAlert] = useState<AlertRow | null>(null);
   const [connected, setConnected] = useState(false);
 
@@ -12,6 +15,28 @@ export function usePatrolAlerts(token: string, vehicleId: number) {
   useEffect(() => {
     if (!token || !vehicleId) return;
     let intentionalClose = false;
+
+    const applyAlert = (a: AlertRow) => {
+      const isResolved = a.status === "resolved" || a.status === "cancelled" || a.status === "pending";
+      const isActive   = a.status === "acknowledged" || a.status === "on_scene";
+      const isQueued   = a.status === "dispatched" && a.dispatched_vehicle_id === vehicleId;
+
+      if (isResolved) {
+        // Returned to pending (rejected) or resolved — remove from everywhere
+        setMyAlert(prev => (prev?.id === a.id ? null : prev));
+        setAlertQueue(prev => prev.filter(q => q.id !== a.id));
+      } else if (isActive && a.dispatched_vehicle_id === vehicleId) {
+        setMyAlert(a);
+        setAlertQueue(prev => prev.filter(q => q.id !== a.id));
+      } else if (isQueued) {
+        setAlertQueue(prev => {
+          const exists = prev.find(q => q.id === a.id);
+          if (exists) return prev.map(q => q.id === a.id ? a : q);
+          return [...prev, a];
+        });
+        setMyAlert(prev => (prev?.id === a.id ? null : prev));
+      }
+    };
 
     const connect = () => {
       try {
@@ -33,23 +58,15 @@ export function usePatrolAlerts(token: string, vehicleId: number) {
             const msg: WSMessage = JSON.parse(event.data);
 
             if (msg.type === "initial_state" && msg.alerts) {
-              const mine = msg.alerts.find(
-                a => a.dispatched_vehicle_id === vehicleId &&
-                     a.status !== "resolved" && a.status !== "cancelled"
-              ) ?? null;
-              setMyAlert(mine);
+              const forMe = msg.alerts.filter(a => a.dispatched_vehicle_id === vehicleId);
+              const active = forMe.find(a => a.status === "acknowledged" || a.status === "on_scene") ?? null;
+              const queue  = forMe.filter(a => a.status === "dispatched");
+              setMyAlert(active);
+              setAlertQueue(queue);
             } else if (msg.type === "alert_updated" && msg.alert) {
-              const a = msg.alert;
-              const isResolved = a.status === "resolved" || a.status === "cancelled";
-              if (a.dispatched_vehicle_id === vehicleId && !isResolved) {
-                setMyAlert(a);
-              } else {
-                // Alert resolved, cancelled, or un-assigned from this vehicle
-                setMyAlert(prev => (prev?.id === a.id ? null : prev));
-              }
+              applyAlert(msg.alert);
             } else if (msg.type === "alert_created" && msg.alert) {
-              const a = msg.alert;
-              if (a.dispatched_vehicle_id === vehicleId) setMyAlert(a);
+              if (msg.alert.dispatched_vehicle_id === vehicleId) applyAlert(msg.alert);
             }
           } catch {
             // ignore parse errors
@@ -81,5 +98,5 @@ export function usePatrolAlerts(token: string, vehicleId: number) {
     };
   }, [token, vehicleId]);
 
-  return { myAlert, connected };
+  return { myAlert, alertQueue, connected };
 }

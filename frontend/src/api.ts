@@ -122,6 +122,8 @@ export const api = {
   // Patrol
   acceptAlert: (token: string, id: number) =>
     put<{ alert: any }>(`/api/alerts/${id}/accept`, {}, token),
+  rejectAlert: (token: string, id: number, reason: string) =>
+    put<{ alert: any }>(`/api/alerts/${id}/reject`, { reason }, token),
   sendPatrolMessage: (token: string, alertId: number, body: string) =>
     post<{ message: AlertMessage }>(`/api/alerts/${alertId}/message`, { body }, token),
   sendCitizenMessage: (token: string, alertId: number, body: string) =>

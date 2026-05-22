@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import {
   LogOut, MapPin, Phone, MessageCircle, CheckCircle, Send,
   Wifi, WifiOff, Clock, FileText, Navigation, Shield,
-  AlertTriangle, User, ChevronRight, CheckCheck,
+  AlertTriangle, User, ChevronRight, CheckCheck, ChevronDown, X,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { usePatrolAlerts } from "../hooks/usePatrolAlerts";
@@ -36,6 +36,24 @@ const TYPE_COLOR: Record<string, string> = {
   suspicious: "text-blue-400 bg-blue-500/15 border-blue-500/40",
   medical: "text-green-400 bg-green-500/15 border-green-500/40",
   other: "text-slate-400 bg-slate-500/15 border-slate-500/40",
+};
+
+// Simulated queued (incoming) complaints per vehicle — shown when no real dispatch is active
+const DEMO_QUEUE: Record<number, { id: number; alert_type: string; citizen_name: string; description: string; lat: number; lng: number; eta_minutes: number; created_at: string; citizen_phone: string }[]> = {
+  1: [
+    { id: -101, alert_type: "harassment",  citizen_name: "Ananya Krishnan",  description: "Man following me near bus stand. I'm scared.",    lat: 12.9312, lng: 80.1489, eta_minutes: 4, created_at: new Date(Date.now()-8*60000).toISOString(), citizen_phone: "9841000011" },
+    { id: -102, alert_type: "suspicious",  citizen_name: "Meena Selvam",     description: "Unknown person loitering outside my house.",       lat: 12.9358, lng: 80.1531, eta_minutes: 7, created_at: new Date(Date.now()-3*60000).toISOString(), citizen_phone: "9841000012" },
+  ],
+  2: [
+    { id: -103, alert_type: "sos",         citizen_name: "Deepa Venkatesh",  description: "Emergency — I need help immediately.",             lat: 12.9671, lng: 80.1602, eta_minutes: 5, created_at: new Date(Date.now()-5*60000).toISOString(), citizen_phone: "9841000013" },
+  ],
+  3: [
+    { id: -104, alert_type: "harassment",  citizen_name: "Priya Rajan",      description: "Neighbour threatening me. Please come.",           lat: 12.9299, lng: 80.1477, eta_minutes: 6, created_at: new Date(Date.now()-11*60000).toISOString(), citizen_phone: "9841000014" },
+    { id: -105, alert_type: "medical",     citizen_name: "Kavitha Nair",     description: "I am injured and need help.",                      lat: 12.9321, lng: 80.1408, eta_minutes: 9, created_at: new Date(Date.now()-2*60000).toISOString(), citizen_phone: "9841000015" },
+  ],
+  4: [
+    { id: -106, alert_type: "sos",         citizen_name: "Selvi Pandian",    description: "SOS — someone tried to grab me.",                  lat: 12.9347, lng: 80.2134, eta_minutes: 3, created_at: new Date(Date.now()-6*60000).toISOString(), citizen_phone: "9841000016" },
+  ],
 };
 
 // Simulated past complaints per patrol vehicle today
@@ -86,7 +104,11 @@ export default function PatrolDashboard() {
   const { user, logout } = useAuth();
   const vehicleId = user?.vehicle_id ?? 0;
   const color = VEHICLE_COLORS[vehicleId] ?? "#3b82f6";
-  const { myAlert, connected } = usePatrolAlerts(user?.token ?? "", vehicleId);
+  const { myAlert, alertQueue: realQueue, connected } = usePatrolAlerts(user?.token ?? "", vehicleId);
+  // Use real queue if populated, otherwise show demo data
+  const alertQueue = realQueue.length > 0
+    ? realQueue
+    : (DEMO_QUEUE[vehicleId] ?? []) as any[];
 
   // Alert interaction state
   const [messages, setMessages]     = useState<AlertMessage[]>([]);
@@ -100,6 +122,12 @@ export default function PatrolDashboard() {
   const [filingReport, setFilingReport] = useState(false);
   const [elapsed, setElapsed]       = useState(0);
   const dispatchedAt = useRef<Date>(new Date());
+
+  // Queue interaction state
+  const [expandedId, setExpandedId]   = useState<number | null>(null);
+  const [rejectingId, setRejectingId] = useState<number | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejecting, setRejecting]     = useState(false);
 
   // Map data
   const [crimes, setCrimes]       = useState<Crime[]>([]);
@@ -155,6 +183,22 @@ export default function PatrolDashboard() {
   }, []);
 
   // ── handlers ──
+
+  const handleAcceptQueued = useCallback(async (alertId: number) => {
+    if (!user?.token || alertId < 0) return; // negative = demo, skip real API
+    try { await api.acceptAlert(user.token, alertId); } catch { /* WS updates */ }
+  }, [user?.token]);
+
+  const handleReject = useCallback(async (alertId: number) => {
+    if (!user?.token || !rejectReason.trim()) return;
+    setRejecting(true);
+    try {
+      await api.rejectAlert(user.token, alertId, rejectReason.trim());
+      setRejectingId(null);
+      setRejectReason("");
+      setExpandedId(null);
+    } catch { /* WS will update */ } finally { setRejecting(false); }
+  }, [user?.token, rejectReason]);
 
   const handleAccept = useCallback(async () => {
     if (!myAlert || !user?.token) return;
@@ -287,16 +331,149 @@ export default function PatrolDashboard() {
         <div className="w-[360px] shrink-0 bg-surface-L1 border-l border-border flex flex-col overflow-hidden">
 
           {/* Panel header */}
-          <div className="px-4 py-3 border-b border-border shrink-0">
+          <div className="px-4 py-3 border-b border-border shrink-0 flex items-center justify-between">
             <p className="text-[10px] font-bold uppercase tracking-widest text-text-muted">
-              {hasActiveAlert ? "Active Complaint" : "Allocated Complaints"}
+              {hasActiveAlert ? "Active Complaint" : alertQueue.length > 0 ? "Allocated Complaints" : "Allocated Complaints"}
             </p>
+            {!hasActiveAlert && alertQueue.length > 0 && (
+              <span className="text-[10px] font-black bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center animate-pulse">
+                {alertQueue.length}
+              </span>
+            )}
           </div>
 
           <div className="flex-1 overflow-y-auto">
 
-            {/* ── STANDBY ── */}
-            {!myAlert && (() => {
+            {/* ── QUEUED COMPLAINTS ── */}
+            {!myAlert && alertQueue.length > 0 && (
+              <div className="flex flex-col h-full overflow-y-auto">
+                <div className="px-4 pt-3 pb-2 shrink-0">
+                  <p className="text-[10px] text-text-muted leading-snug">
+                    Review and accept or reject each complaint. Rejection requires a reason sent back to Command Centre.
+                  </p>
+                </div>
+                <div className="px-3 pb-4 space-y-2.5">
+                  {alertQueue.map((c: any) => {
+                    const isExpanded = expandedId === c.id;
+                    const isRejectOpen = rejectingId === c.id;
+                    const ageMin = Math.round((Date.now() - new Date(c.created_at).getTime()) / 60000);
+                    return (
+                      <div key={c.id} className={`rounded-xl border transition-all ${
+                        isExpanded ? "border-amber-500/40 bg-amber-500/5" : "border-border bg-surface-L2"
+                      }`}>
+                        {/* Collapsed row */}
+                        <button
+                          className="w-full flex items-center gap-3 px-3 py-3 text-left"
+                          onClick={() => { setExpandedId(isExpanded ? null : c.id); setRejectingId(null); setRejectReason(""); }}
+                        >
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${TYPE_COLOR[c.alert_type]}`}>
+                            {TYPE_LABEL[c.alert_type] ?? c.alert_type}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[12px] font-bold text-text-primary truncate">{c.citizen_name ?? `Citizen #${c.citizen_id}`}</p>
+                            <p className="text-[10px] text-text-muted">{ageMin < 1 ? "Just now" : `${ageMin} min ago`} · ETA {c.eta_minutes ?? "—"} min</p>
+                          </div>
+                          <ChevronDown className={`w-4 h-4 text-text-muted shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                        </button>
+
+                        {/* Expanded: victim details + actions */}
+                        {isExpanded && (
+                          <div className="px-3 pb-3 space-y-3 border-t border-border/50 pt-3">
+                            {/* Victim info */}
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-9 h-9 rounded-full bg-blue-500/15 border border-blue-500/30 flex items-center justify-center shrink-0">
+                                  <User className="w-4 h-4 text-blue-400" />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-bold text-text-primary">{c.citizen_name ?? `Citizen #${c.citizen_id}`}</p>
+                                  <p className="text-[10px] text-text-muted">Complaint #{Math.abs(c.id)}</p>
+                                </div>
+                              </div>
+                              {c.description && (
+                                <p className="text-sm text-text-secondary bg-surface-L1 rounded-xl px-3 py-2.5 border border-border italic">
+                                  "{c.description}"
+                                </p>
+                              )}
+                              <div className="flex items-center gap-2 text-[11px] text-text-muted">
+                                <MapPin className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                                <span className="font-mono">{c.lat?.toFixed(4)}, {c.lng?.toFixed(4)}</span>
+                              </div>
+                              {c.citizen_phone && (
+                                <a href={`tel:${c.citizen_phone}`}
+                                  className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 border bg-green-500/8 border-green-500/30 hover:bg-green-500/15 transition">
+                                  <Phone className="w-4 h-4 text-green-400 shrink-0" />
+                                  <div className="flex-1">
+                                    <p className="text-[10px] text-text-muted">Tap to call victim</p>
+                                    <p className="text-sm font-bold text-text-primary">{c.citizen_phone}</p>
+                                  </div>
+                                  <ChevronRight className="w-4 h-4 text-green-400 opacity-60" />
+                                </a>
+                              )}
+                              <p className="text-[11px] text-amber-400 font-semibold">
+                                📍 Estimated arrival: ~{c.eta_minutes ?? "—"} min drive
+                              </p>
+                            </div>
+
+                            {/* Accept / Reject buttons */}
+                            {!isRejectOpen && (
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => { setExpandedId(null); /* accept uses real flow */ handleAcceptQueued(c.id); }}
+                                  className="flex-1 py-2.5 bg-green-600 hover:bg-green-500 text-white font-black text-sm rounded-xl transition flex items-center justify-center gap-2 shadow"
+                                >
+                                  <CheckCircle className="w-4 h-4" /> Accept
+                                </button>
+                                <button
+                                  onClick={() => { setRejectingId(c.id); setRejectReason(""); }}
+                                  className="flex-1 py-2.5 bg-red-500/15 hover:bg-red-500/25 text-red-400 border border-red-500/30 font-bold text-sm rounded-xl transition flex items-center justify-center gap-2"
+                                >
+                                  <X className="w-4 h-4" /> Reject
+                                </button>
+                              </div>
+                            )}
+
+                            {/* Reject reason form */}
+                            {isRejectOpen && (
+                              <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-3 space-y-2.5">
+                                <p className="text-[11px] font-bold text-red-400">Reason for rejection (required — sent to Command Centre)</p>
+                                <textarea
+                                  value={rejectReason}
+                                  onChange={e => setRejectReason(e.target.value.slice(0, 300))}
+                                  placeholder="e.g. Already responding to another emergency nearby…"
+                                  rows={3}
+                                  className="w-full bg-surface-L2 border border-border text-text-primary text-sm rounded-xl px-3 py-2 placeholder-text-muted focus:outline-none focus:border-red-500/60 resize-none"
+                                  autoFocus
+                                />
+                                <p className="text-[10px] text-text-muted text-right">{rejectReason.length}/300</p>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => handleReject(c.id)}
+                                    disabled={!rejectReason.trim() || rejecting}
+                                    className="flex-1 py-2 bg-red-600 hover:bg-red-500 text-white font-bold text-sm rounded-xl transition disabled:opacity-50"
+                                  >
+                                    {rejecting ? "Sending…" : "Confirm Rejection"}
+                                  </button>
+                                  <button
+                                    onClick={() => { setRejectingId(null); setRejectReason(""); }}
+                                    className="px-3 py-2 bg-surface-L2 border border-border text-text-muted hover:text-text-primary rounded-xl transition text-sm"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ── STANDBY (no queue) ── */}
+            {!myAlert && alertQueue.length === 0 && (() => {
               const past = PAST_COMPLAINTS[vehicleId] ?? [];
               const dsr  = past.filter(c => c.outcome === "DSR").length;
               const csr  = past.filter(c => c.outcome === "CSR").length;
