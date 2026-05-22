@@ -160,12 +160,13 @@ interface MapProps {
   hideCrimes?: boolean;
   venueZoomThreshold?: number;
   token?: string;
+  navTarget?: { fromLat: number; fromLng: number; toLat: number; toLng: number; color: string } | null;
 }
 
 export default function Map({
   crimes, hotspots, vehicles, venues, isLoading, activeAlerts, liveAlertLocations,
   selectedAlertId, onResetView, vehicleAssignments, onVehicleReached,
-  hideCrimes, venueZoomThreshold, token,
+  hideCrimes, venueZoomThreshold, token, navTarget,
 }: MapProps) {
   const mapEl  = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -196,6 +197,7 @@ export default function Map({
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [showTrails, setShowTrails]   = useState(false);
   const trailLayersRef = useRef<Record<number, L.Polyline>>({});
+  const navLineRef = useRef<L.Polyline | null>(null);
 
   useEffect(() => { showVenuesRef.current = showVenues; }, [showVenues]);
   useEffect(() => { onVehicleReachedRef.current = onVehicleReached; }, [onVehicleReached]);
@@ -843,6 +845,18 @@ export default function Map({
       }
     });
   }, [vehicleAssignments, activeAlerts, vehicles]);
+
+  // ── navTarget: patrol officer → victim navigation line ──────────────────────
+  useEffect(() => {
+    if (!mapRef.current) return;
+    navLineRef.current?.remove();
+    navLineRef.current = null;
+    if (!navTarget) return;
+    navLineRef.current = L.polyline(
+      [[navTarget.fromLat, navTarget.fromLng], [navTarget.toLat, navTarget.toLng]],
+      { color: navTarget.color, weight: 3, opacity: 0.75, dashArray: "10 7" },
+    ).addTo(mapRef.current);
+  }, [navTarget]);
 
   return (
     <div className="relative h-full w-full overflow-hidden">

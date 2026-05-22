@@ -4,19 +4,15 @@ import {
   Wifi, WifiOff, Clock, FileText, Navigation, Shield,
   AlertTriangle, User, ChevronRight, CheckCheck,
 } from "lucide-react";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
 import { useAuth } from "../contexts/AuthContext";
 import { usePatrolAlerts } from "../hooks/usePatrolAlerts";
 import { api } from "../api";
-import { AlertMessage } from "../types";
+import { AlertMessage, Crime, PatrolZone, PatrolVehicle, Venue, AlertRow } from "../types";
+import MapComponent from "../components/Map";
 
 // ── constants ──────────────────────────────────────────────────────────────
 
-const ZONE_CENTERS: Record<number, [number, number]> = {
-  1: [12.9398, 80.1323], 2: [12.9657, 80.1588],
-  3: [12.9314, 80.1496], 4: [12.9344, 80.2120],
-};
+
 const ZONE_NAMES: Record<number, string> = {
   1: "Tambaram", 2: "Pallavaram", 3: "Vandalur", 4: "Semmenchery",
 };
@@ -78,12 +74,13 @@ export default function PatrolDashboard() {
   const [elapsed, setElapsed]       = useState(0);
   const dispatchedAt = useRef<Date>(new Date());
 
-  // Map refs
-  const mapContainerRef  = useRef<HTMLDivElement>(null);
-  const leafletMapRef    = useRef<L.Map | null>(null);
-  const citizenMarkerRef = useRef<L.Marker | null>(null);
-  const myMarkerRef      = useRef<L.Marker | null>(null);
-  const navLineRef       = useRef<L.Polyline | null>(null);
+  // Map data
+  const [crimes, setCrimes]       = useState<Crime[]>([]);
+  const [hotspots, setHotspots]   = useState<PatrolZone[]>([]);
+  const [vehicles, setVehicles]   = useState<PatrolVehicle[]>([]);
+  const [venues, setVenues]       = useState<Venue[]>([]);
+
+  // GPS position for nav line
   const [myPos, setMyPos] = useState<{ lat: number; lng: number } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -122,87 +119,13 @@ export default function PatrolDashboard() {
   // Scroll messages
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-  // ── map lifecycle ──
-
+  // Load map data once
   useEffect(() => {
-    if (!mapContainerRef.current || leafletMapRef.current) return;
-
-    const center: [number, number] = myAlert
-      ? [myAlert.lat, myAlert.lng]
-      : (ZONE_CENTERS[vehicleId] ?? [12.9349, 80.1706]);
-
-    const map = L.map(mapContainerRef.current, {
-      center, zoom: myAlert ? 14 : 13, zoomControl: true,
-    });
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-      attribution: "© OpenStreetMap © CARTO", subdomains: "abcd", maxZoom: 19,
-    }).addTo(map);
-    leafletMapRef.current = map;
-
-    return () => {
-      map.remove();
-      leafletMapRef.current = null;
-      citizenMarkerRef.current = null;
-      myMarkerRef.current = null;
-      navLineRef.current = null;
-    };
+    api.crimes().then(r => setCrimes(r.crimes ?? [])).catch(() => {});
+    api.hotspots().then(r => setHotspots(r.hotspots ?? [])).catch(() => {});
+    api.vehicles().then(r => setVehicles(r.vehicles ?? [])).catch(() => {});
+    api.venues().then(r => setVenues(r.venues ?? [])).catch(() => {});
   }, []);
-
-  // Update citizen / nav markers when alert changes
-  useEffect(() => {
-    const map = leafletMapRef.current;
-    if (!map) return;
-
-    // Remove old citizen marker + nav line
-    citizenMarkerRef.current?.remove();
-    citizenMarkerRef.current = null;
-    navLineRef.current?.remove();
-    navLineRef.current = null;
-
-    if (!myAlert) return;
-
-    const citizenIcon = L.divIcon({
-      html: `<div style="position:relative;width:40px;height:40px;">
-        <div style="position:absolute;inset:0;border-radius:50%;background:rgba(239,68,68,0.22);animation:ping-p 1.6s cubic-bezier(0,0,0.2,1) infinite;"></div>
-        <div style="position:absolute;inset:5px;border-radius:50%;background:#ef4444;border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 2px 10px rgba(0,0,0,0.5);">🆘</div>
-      </div>`,
-      iconSize: [40, 40], iconAnchor: [20, 20], className: "",
-    });
-    citizenMarkerRef.current = L.marker([myAlert.lat, myAlert.lng], { icon: citizenIcon })
-      .addTo(map)
-      .bindPopup(`<b style="color:#ef4444">${(myAlert as any).citizen_name ?? "Citizen"}</b><br/>${myAlert.lat.toFixed(4)}, ${myAlert.lng.toFixed(4)}`);
-
-    map.flyTo([myAlert.lat, myAlert.lng], 14, { duration: 1.2 });
-  }, [myAlert?.id]);
-
-  // Update officer position marker + nav line
-  useEffect(() => {
-    const map = leafletMapRef.current;
-    if (!map) return;
-
-    if (myPos) {
-      const icon = L.divIcon({
-        html: `<div style="width:30px;height:30px;border-radius:50%;background:${color};border:3px solid #fff;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,0.5);">🚔</div>`,
-        iconSize: [30, 30], iconAnchor: [15, 15], className: "",
-      });
-      if (myMarkerRef.current) {
-        myMarkerRef.current.setLatLng([myPos.lat, myPos.lng]);
-      } else {
-        myMarkerRef.current = L.marker([myPos.lat, myPos.lng], { icon }).addTo(map);
-      }
-    }
-
-    // Navigation line
-    navLineRef.current?.remove();
-    navLineRef.current = null;
-    if (myPos && myAlert) {
-      navLineRef.current = L.polyline(
-        [[myPos.lat, myPos.lng], [myAlert.lat, myAlert.lng]],
-        { color, weight: 2.5, opacity: 0.6, dashArray: "10 7" },
-      ).addTo(map);
-      map.fitBounds([[myPos.lat, myPos.lng], [myAlert.lat, myAlert.lng]], { padding: [60, 60] });
-    }
-  }, [myPos, myAlert?.id]);
 
   // ── handlers ──
 
@@ -242,6 +165,16 @@ export default function PatrolDashboard() {
   const hasActiveAlert = isIncoming || isAccepted || isOnScene;
   const citizenName = (myAlert as any)?.citizen_name ?? (myAlert ? `Citizen #${myAlert.citizen_id}` : null);
   const citizenPhone = (myAlert as any)?.citizen_phone ?? null;
+
+  // Navigation line from officer GPS → victim
+  const navTarget = myPos && myAlert ? {
+    fromLat: myPos.lat, fromLng: myPos.lng,
+    toLat: myAlert.lat, toLng: myAlert.lng,
+    color,
+  } : null;
+
+  // Active alert as an array for the map to show the SOS pin
+  const mapAlerts: AlertRow[] = myAlert ? [myAlert as AlertRow] : [];
 
   // ── render ──
 
@@ -285,13 +218,22 @@ export default function PatrolDashboard() {
       {/* ── Main: Map + Panel ── */}
       <div className="flex-1 flex overflow-hidden">
 
-        {/* ── LEFT: Map ── */}
+        {/* ── LEFT: Map (same as Command Centre) ── */}
         <div className="flex-1 relative overflow-hidden">
-          <div ref={mapContainerRef} className="absolute inset-0" />
+          <MapComponent
+            crimes={crimes}
+            hotspots={hotspots}
+            vehicles={vehicles}
+            venues={venues}
+            activeAlerts={mapAlerts}
+            selectedAlertId={myAlert?.id ?? null}
+            navTarget={navTarget}
+            token={user?.token}
+          />
 
-          {/* Navigation overlay button */}
+          {/* Navigate to Victim button — overlaid on map */}
           {myAlert && (
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[1000] flex gap-2">
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[1001] flex gap-2">
               <a
                 href={myPos
                   ? `https://maps.google.com/maps?saddr=${myPos.lat},${myPos.lng}&daddr=${myAlert.lat},${myAlert.lng}&dirflg=d`
@@ -305,24 +247,13 @@ export default function PatrolDashboard() {
             </div>
           )}
 
-          {/* Standby zone label */}
-          {!myAlert && (
-            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] bg-surface-L1/90 border border-border text-text-muted text-xs font-semibold px-3 py-1.5 rounded-full shadow">
-              Monitoring {ZONE_NAMES[vehicleId]} zone
-            </div>
-          )}
-
-          {/* Alert location tag on map */}
+          {/* Alert type tag — overlaid on map */}
           {myAlert && (
-            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-2 bg-red-500/90 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-xl">
+            <div className="absolute top-16 left-1/2 -translate-x-1/2 z-[1001] flex items-center gap-2 bg-red-500/90 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-xl backdrop-blur-sm">
               <AlertTriangle className="w-3.5 h-3.5" />
               {TYPE_LABEL[myAlert.alert_type] ?? myAlert.alert_type.toUpperCase()} · {myAlert.lat.toFixed(4)}, {myAlert.lng.toFixed(4)}
             </div>
           )}
-
-          <style>{`
-            @keyframes ping-p { 75%, 100% { transform: scale(2.2); opacity: 0; } }
-          `}</style>
         </div>
 
         {/* ── RIGHT: Complaint Panel ── */}
