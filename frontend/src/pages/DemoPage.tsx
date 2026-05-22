@@ -1,13 +1,31 @@
+import { useState } from "react";
 import { useTheme } from "../contexts/ThemeContext";
 import { Sun, Moon } from "lucide-react";
 
+type DemoView = "command" | "patrol";
+
+const PANES: Record<DemoView, { label: string; url: string }[]> = {
+  command: [
+    { label: "👩 Citizen View",       url: "/login?autoLogin=citizen&demo=1" },
+    { label: "🛡️ Command Centre",     url: "/login?autoLogin=officer&demo=1" },
+    { label: "⭐ Commissioner View",  url: "/login?autoLogin=commissioner&demo=1" },
+  ],
+  patrol: [
+    { label: "👩 Citizen View",        url: "/login?autoLogin=citizen&demo=1" },
+    { label: "🚔 Patrol Officer View", url: "/login?autoLogin=patrol&demo=1" },
+  ],
+};
+
+const SUBTITLES: Record<DemoView, string> = {
+  command: "Raise SOS on the left → see it appear on Command Centre and Commissioner in real time",
+  patrol:  "Raise SOS as citizen → dispatch from Command Centre → patrol officer receives and accepts",
+};
+
 export default function DemoPage() {
   const { theme, toggle } = useTheme();
+  const [demoView, setDemoView] = useState<DemoView>("command");
 
-  const panes = [
-    { label: "👩 Citizen View",           url: "/login?autoLogin=citizen&demo=1" },
-    { label: "🛡️ Police Personnel View",  url: "/login?autoLogin=officer&demo=1" },
-  ];
+  const panes = PANES[demoView];
 
   return (
     <div
@@ -50,17 +68,45 @@ export default function DemoPage() {
           <span style={{ color: "var(--text-primary)", fontWeight: 800, fontSize: 14, letterSpacing: "-0.3px" }}>
             Singapenne — Live Demo
           </span>
-          <span
-            style={{
-              marginLeft: 12,
-              color: "var(--text-secondary)",
-              fontSize: 12,
-            }}
-          >
-            Raise SOS on the left → see it appear on the right in real time
+          <span style={{ marginLeft: 12, color: "var(--text-secondary)", fontSize: 12 }}>
+            {SUBTITLES[demoView]}
           </span>
         </div>
         <div style={{ flex: 1 }} />
+
+        {/* View switcher tabs */}
+        <div
+          style={{
+            display: "flex",
+            gap: 4,
+            background: "var(--surface-L2)",
+            borderRadius: 8,
+            padding: 3,
+            border: "1px solid var(--border)",
+          }}
+        >
+          {(["command", "patrol"] as DemoView[]).map((v) => (
+            <button
+              key={v}
+              onClick={() => setDemoView(v)}
+              style={{
+                padding: "4px 12px",
+                borderRadius: 6,
+                border: "none",
+                cursor: "pointer",
+                fontSize: 11,
+                fontWeight: 700,
+                transition: "all 0.15s",
+                background: demoView === v ? "var(--surface-L1)" : "transparent",
+                color: demoView === v ? "var(--text-primary)" : "var(--text-muted)",
+                boxShadow: demoView === v ? "0 1px 3px rgba(0,0,0,0.2)" : "none",
+              }}
+            >
+              {v === "command" ? "Command View" : "Patrol View"}
+            </button>
+          ))}
+        </div>
+
         <button
           onClick={toggle}
           title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}

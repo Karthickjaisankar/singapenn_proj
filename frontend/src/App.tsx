@@ -7,6 +7,8 @@ import LoginPage from "./pages/LoginPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import CitizenDashboard from "./pages/CitizenDashboard";
 import OfficerDashboard from "./pages/OfficerDashboard";
+import CommissionerDashboard from "./pages/CommissionerDashboard";
+import PatrolDashboard from "./pages/PatrolDashboard";
 import DemoPage from "./pages/DemoPage";
 
 function RootRedirect() {
@@ -21,7 +23,9 @@ function RootRedirect() {
   }
 
   if (!user) return <Navigate to="/login" replace />;
-  if (user.role === "officer" || user.role === "commissioner") return <Navigate to="/officer" replace />;
+  if (user.role === "officer")      return <Navigate to="/officer" replace />;
+  if (user.role === "commissioner") return <Navigate to="/commissioner" replace />;
+  if (user.role === "patrol")       return <Navigate to="/patrol" replace />;
   return <Navigate to="/citizen" replace />;
 }
 
@@ -49,7 +53,22 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
-            <Route path="/commissioner" element={<Navigate to="/officer" replace />} />
+            <Route
+              path="/commissioner"
+              element={
+                <ProtectedRoute requiredRole="commissioner">
+                  <CommissionerDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/patrol"
+              element={
+                <ProtectedRoute requiredRole="patrol">
+                  <PatrolDashboard />
+                </ProtectedRoute>
+              }
+            />
             <Route path="/demo" element={<DemoPage />} />
             <Route path="/" element={<RootRedirect />} />
             <Route path="*" element={<Navigate to="/" replace />} />

@@ -83,6 +83,24 @@ export type TimeSlot = "all" | "morning" | "afternoon" | "night";
 export type AlertType = "sos" | "harassment" | "suspicious" | "medical" | "other";
 export type AlertStatus = "pending" | "acknowledged" | "dispatched" | "resolved" | "cancelled";
 
+export interface AlertMessage {
+  id: number;
+  alert_id: number;
+  sender_id: number;
+  sender_role: string;
+  body: string;
+  created_at: string;
+}
+
+export interface CommissionerSummary {
+  today_total: number;
+  today_resolved: number;
+  today_pending: number;
+  today_dispatched: number;
+  response_rate_pct: number;
+  avg_eta_minutes: number;
+}
+
 export interface AlertRow {
   id: number;
   citizen_id: number;
@@ -98,6 +116,7 @@ export interface AlertRow {
   created_at: string;
   updated_at: string;
   resolved_at: string | null;
+  messages?: AlertMessage[];
 }
 
 export interface WSMessage {

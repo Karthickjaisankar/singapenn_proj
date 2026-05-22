@@ -1,6 +1,7 @@
 import {
   Crime, PatrolZone, PatrolVehicle, Venue, Stats, Meta, RoutingResponse,
   IncidentReport, PatrolAnomalyResponse, ReportingGapStats, FoPVolunteer,
+  AlertMessage, CommissionerSummary,
 } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
@@ -113,6 +114,18 @@ export const api = {
     get<{ reports: IncidentReport[]; total: number }>("/api/reports/pending-fir", token),
   escalateReport: (token: string, id: number, escalated_to: string) =>
     put<{ report: IncidentReport }>(`/api/reports/${id}/escalate`, { escalated_to }, token),
+
+  // Commissioner
+  commissionerSummary: (token: string) =>
+    get<CommissionerSummary>("/api/commissioner/summary", token),
+
+  // Patrol
+  acceptAlert: (token: string, id: number) =>
+    put<{ alert: any }>(`/api/alerts/${id}/accept`, {}, token),
+  sendPatrolMessage: (token: string, alertId: number, body: string) =>
+    post<{ message: AlertMessage }>(`/api/alerts/${alertId}/message`, { body }, token),
+  getAlertMessages: (token: string, alertId: number) =>
+    get<{ messages: AlertMessage[] }>(`/api/alerts/${alertId}/messages`, token),
 
   // Friend of Police
   registerFoP: (token: string, area?: string) =>

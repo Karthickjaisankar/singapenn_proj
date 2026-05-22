@@ -72,11 +72,14 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    vehicle_id = payload.get("vehicle_id")
+
     return {
         "user_id": user_id,
         "username": username,
         "role": role,
         "full_name": full_name,
+        "vehicle_id": vehicle_id,
     }
 
 async def require_officer(current_user: dict = Depends(get_current_user)) -> dict:
@@ -103,5 +106,23 @@ async def require_commissioner(current_user: dict = Depends(get_current_user)) -
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Commissioner access required",
+        )
+    return current_user
+
+async def require_patrol(current_user: dict = Depends(get_current_user)) -> dict:
+    """Require that the current user is a patrol officer."""
+    if current_user["role"] != "patrol":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Patrol access required",
+        )
+    return current_user
+
+async def require_command(current_user: dict = Depends(get_current_user)) -> dict:
+    """Require officer or commissioner — read/write for officer, read-only by UI convention for commissioner."""
+    if current_user["role"] not in ("officer", "commissioner"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Command access required",
         )
     return current_user

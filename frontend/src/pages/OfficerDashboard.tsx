@@ -884,8 +884,8 @@ export default function OfficerDashboard() {
       <div className="bg-surface-L1 border-b border-border px-4 py-2 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
           <div>
-            <p className="text-sm font-black text-text-primary leading-none">Singapenne · SSF</p>
-            <p className="text-[10px] text-text-muted mt-0.5">{user?.full_name ?? "Field Officer"}</p>
+            <p className="text-sm font-black text-text-primary leading-none">Singapenne · Command Centre</p>
+            <p className="text-[10px] text-text-muted mt-0.5">{user?.full_name ?? "Command Centre Officer"}</p>
           </div>
           {/* Live indicator */}
           <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[10px] font-semibold ${

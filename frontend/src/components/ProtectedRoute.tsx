@@ -4,12 +4,13 @@ import { useAuth } from "../contexts/AuthContext";
 
 interface ProtectedRouteProps {
   children: ReactNode;
-  requiredRole?: "citizen" | "officer" | "commissioner";
+  requiredRole?: "citizen" | "officer" | "commissioner" | "patrol";
 }
 
 function roleHome(role: string): string {
   if (role === "officer") return "/officer";
   if (role === "commissioner") return "/commissioner";
+  if (role === "patrol") return "/patrol";
   return "/citizen";
 }
 

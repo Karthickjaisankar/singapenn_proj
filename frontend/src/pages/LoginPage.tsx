@@ -5,8 +5,10 @@ import { useTheme } from "../contexts/ThemeContext";
 import { Eye, EyeOff, Shield, Sun, Moon } from "lucide-react";
 
 const DEMO_CREDENTIALS = [
-  { label: "Police Personnel", username: "officer1", password: "officer1pass", color: "text-blue-400 border-blue-500/30 hover:bg-blue-500/10" },
-  { label: "Citizen", username: "citizen1", password: "citizen1pass", color: "text-green-400 border-green-500/30 hover:bg-green-500/10" },
+  { label: "Command Centre",  username: "officer1",      password: "officer1pass", color: "text-blue-400 border-blue-500/30 hover:bg-blue-500/10" },
+  { label: "Citizen",         username: "citizen1",      password: "citizen1pass", color: "text-green-400 border-green-500/30 hover:bg-green-500/10" },
+  { label: "Commissioner",    username: "commissioner1", password: "comm1pass",    color: "text-purple-400 border-purple-500/30 hover:bg-purple-500/10" },
+  { label: "Patrol Officer",  username: "patrol1",       password: "patrol1pass",  color: "text-amber-400 border-amber-500/30 hover:bg-amber-500/10" },
 ];
 
 export default function LoginPage() {
@@ -23,8 +25,9 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const authUser = await login(u, p);
-      if (authUser.role === "officer") navigate("/officer");
+      if (authUser.role === "officer")           navigate("/officer");
       else if (authUser.role === "commissioner") navigate("/commissioner");
+      else if (authUser.role === "patrol")       navigate("/patrol");
       else navigate("/citizen");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
@@ -38,14 +41,12 @@ export default function LoginPage() {
     await doLogin(username, password);
   };
 
-  // Auto-login for demo iframes: ?autoLogin=citizen or ?autoLogin=officer
+  // Auto-login for demo iframes: ?autoLogin=citizen|officer|commissioner|patrol
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const role = params.get("autoLogin");
     if (!role) return;
-    const cred = DEMO_CREDENTIALS.find((c) =>
-      role === "citizen" ? c.username.startsWith("citizen") : c.username.startsWith("officer")
-    );
+    const cred = DEMO_CREDENTIALS.find((c) => c.username.startsWith(role === "officer" ? "officer" : role));
     if (!cred) return;
     setUsername(cred.username);
     setPassword(cred.password);

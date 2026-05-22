@@ -312,6 +312,17 @@ export default function CitizenDashboard() {
                       <span className="text-base">📍</span>
                       <span>Your exact location has been shared with the officer</span>
                     </div>
+                    {activeAlert?.messages && activeAlert.messages.length > 0 && (
+                      <div className="mt-3 space-y-1.5">
+                        <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Updates from Officer</p>
+                        {activeAlert.messages.map(m => (
+                          <div key={m.id} className="bg-surface-L2 rounded-xl px-3 py-2 text-sm text-text-primary flex justify-between items-start gap-2">
+                            <span>{m.body}</span>
+                            <span className="text-[10px] text-text-muted shrink-0">{relTime(m.created_at)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="border-t border-border px-5 py-3">
                     <button onClick={handleCancelAlert}

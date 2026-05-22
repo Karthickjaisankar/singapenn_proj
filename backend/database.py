@@ -22,9 +22,10 @@ def init_db():
             id            INTEGER PRIMARY KEY AUTOINCREMENT,
             username      TEXT NOT NULL UNIQUE,
             password_hash TEXT NOT NULL,
-            role          TEXT NOT NULL CHECK(role IN ('citizen','officer','commissioner')),
+            role          TEXT NOT NULL CHECK(role IN ('citizen','officer','commissioner','patrol')),
             full_name     TEXT NOT NULL,
             phone         TEXT,
+            vehicle_id    INTEGER,
             created_at    TEXT DEFAULT (datetime('now'))
         )
     """)
@@ -113,6 +114,17 @@ def init_db():
         )
     """)
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS alert_messages (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            alert_id    INTEGER NOT NULL REFERENCES alerts(id),
+            sender_id   INTEGER NOT NULL REFERENCES users(id),
+            sender_role TEXT NOT NULL,
+            body        TEXT NOT NULL,
+            created_at  TEXT DEFAULT (datetime('now'))
+        )
+    """)
+
     conn.commit()
 
     # Seed default users if empty
@@ -125,24 +137,30 @@ def init_db():
     conn.close()
 
 def _seed_default_users(conn: sqlite3.Connection):
-    """Seed default officer, commissioner, and citizen accounts."""
+    """Seed default officer, commissioner, citizen, and patrol accounts."""
     from backend.auth import hash_password
 
     cursor = conn.cursor()
+    # (username, password_hash, role, full_name, phone, vehicle_id)
     users = [
-        # Field officers (SSF)
-        ("officer1", hash_password("officer1pass"), "officer", "SI Murugan", "9841000001"),
-        ("officer2", hash_password("officer2pass"), "officer", "SI Yoganandham", "9841000002"),
+        # Command Centre officers (SSF)
+        ("officer1", hash_password("officer1pass"), "officer", "SI Murugan", "9841000001", None),
+        ("officer2", hash_password("officer2pass"), "officer", "SI Yoganandham", "9841000002", None),
         # Commissioner
-        ("commissioner1", hash_password("comm1pass"), "commissioner", "Commissioner Sanjay Kumar IPS", "9841000003"),
+        ("commissioner1", hash_password("comm1pass"), "commissioner", "Commissioner Sanjay Kumar IPS", "9841000003", None),
         # Citizens
-        ("citizen1", hash_password("citizen1pass"), "citizen", "Ananya Krishnan", "9841000011"),
-        ("citizen2", hash_password("citizen2pass"), "citizen", "Meena Selvam", "9841000012"),
-        ("citizen3", hash_password("citizen3pass"), "citizen", "Deepa Venkatesh", "9841000013"),
+        ("citizen1", hash_password("citizen1pass"), "citizen", "Ananya Krishnan", "9841000011", None),
+        ("citizen2", hash_password("citizen2pass"), "citizen", "Meena Selvam", "9841000012", None),
+        ("citizen3", hash_password("citizen3pass"), "citizen", "Deepa Venkatesh", "9841000013", None),
+        # Patrol officers — each mapped to a SSF vehicle
+        ("patrol1", hash_password("patrol1pass"), "patrol", "Const. Ravi Kumar",   "9841000021", 1),
+        ("patrol2", hash_password("patrol2pass"), "patrol", "Const. Kavitha Devi", "9841000022", 2),
+        ("patrol3", hash_password("patrol3pass"), "patrol", "Const. Arjun Singh",  "9841000023", 3),
+        ("patrol4", hash_password("patrol4pass"), "patrol", "Const. Meena Rani",   "9841000024", 4),
     ]
 
     cursor.executemany(
-        "INSERT INTO users (username, password_hash, role, full_name, phone) VALUES (?,?,?,?,?)",
+        "INSERT INTO users (username, password_hash, role, full_name, phone, vehicle_id) VALUES (?,?,?,?,?,?)",
         users
     )
     conn.commit()
@@ -183,22 +201,30 @@ def _seed_demo_alerts(conn: sqlite3.Connection):
 
 
 def _ensure_commissioner_user(conn: sqlite3.Connection):
-    """Add commissioner1 if not present (handles existing DBs from before this role existed)."""
+    """Add missing users (handles existing DBs from before new roles were added).
+    NOTE: If the CHECK constraint is too old, delete alerts.db and restart to regenerate.
+    """
     from backend.auth import hash_password
     cursor = conn.cursor()
-    cursor.execute("SELECT id FROM users WHERE username = 'commissioner1'")
-    if cursor.fetchone() is None:
-        try:
-            cursor.execute(
-                "INSERT INTO users (username, password_hash, role, full_name, phone) VALUES (?,?,?,?,?)",
-                ("commissioner1", hash_password("comm1pass"), "commissioner",
-                 "Commissioner Sanjay Kumar IPS", "9841000003"),
-            )
-            conn.commit()
-        except sqlite3.IntegrityError:
-            # Old DB has a CHECK constraint that doesn't include 'commissioner'.
-            # Delete alerts.db and restart the backend to regenerate with the new schema.
-            print("WARNING: Could not create commissioner1 — old schema. Delete alerts.db and restart.")
+
+    missing = [
+        ("commissioner1", hash_password("comm1pass"), "commissioner", "Commissioner Sanjay Kumar IPS", "9841000003", None),
+        ("patrol1", hash_password("patrol1pass"), "patrol", "Const. Ravi Kumar",   "9841000021", 1),
+        ("patrol2", hash_password("patrol2pass"), "patrol", "Const. Kavitha Devi", "9841000022", 2),
+        ("patrol3", hash_password("patrol3pass"), "patrol", "Const. Arjun Singh",  "9841000023", 3),
+        ("patrol4", hash_password("patrol4pass"), "patrol", "Const. Meena Rani",   "9841000024", 4),
+    ]
+    for (uname, phash, role, full_name, phone, vid) in missing:
+        cursor.execute("SELECT id FROM users WHERE username = ?", (uname,))
+        if cursor.fetchone() is None:
+            try:
+                cursor.execute(
+                    "INSERT INTO users (username, password_hash, role, full_name, phone, vehicle_id) VALUES (?,?,?,?,?,?)",
+                    (uname, phash, role, full_name, phone, vid),
+                )
+                conn.commit()
+            except sqlite3.IntegrityError:
+                print(f"WARNING: Could not create {uname} — old schema. Delete alerts.db and restart.")
 
 
 # ============ User Functions ============
@@ -207,7 +233,7 @@ def get_user_by_username(username: str) -> Optional[dict]:
     """Get user by username."""
     conn = get_conn()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, username, password_hash, role, full_name, phone, created_at FROM users WHERE username = ?", (username,))
+    cursor.execute("SELECT id, username, password_hash, role, full_name, phone, vehicle_id, created_at FROM users WHERE username = ?", (username,))
     row = cursor.fetchone()
     conn.close()
     return dict(row) if row else None
@@ -216,7 +242,7 @@ def get_user_by_id(user_id: int) -> Optional[dict]:
     """Get user by ID."""
     conn = get_conn()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, username, password_hash, role, full_name, phone, created_at FROM users WHERE id = ?", (user_id,))
+    cursor.execute("SELECT id, username, password_hash, role, full_name, phone, vehicle_id, created_at FROM users WHERE id = ?", (user_id,))
     row = cursor.fetchone()
     conn.close()
     return dict(row) if row else None
@@ -254,7 +280,7 @@ def get_alert_by_id(alert_id: int) -> Optional[dict]:
     return dict(row) if row else None
 
 def get_alerts_for_citizen(citizen_id: int) -> list[dict]:
-    """Get all alerts for a citizen."""
+    """Get all alerts for a citizen, with patrol messages embedded."""
     conn = get_conn()
     cursor = conn.cursor()
     cursor.execute("""
@@ -263,9 +289,24 @@ def get_alerts_for_citizen(citizen_id: int) -> list[dict]:
                created_at, updated_at, resolved_at
         FROM alerts WHERE citizen_id = ? ORDER BY id DESC
     """, (citizen_id,))
-    rows = cursor.fetchall()
+    alerts = [dict(row) for row in cursor.fetchall()]
+
+    # Embed patrol messages keyed by alert_id
+    if alerts:
+        alert_ids = [a["id"] for a in alerts]
+        placeholders = ",".join("?" * len(alert_ids))
+        msg_rows = conn.execute(
+            f"SELECT * FROM alert_messages WHERE alert_id IN ({placeholders}) ORDER BY created_at",
+            alert_ids
+        ).fetchall()
+        msgs_by_alert: dict = {}
+        for r in msg_rows:
+            msgs_by_alert.setdefault(r["alert_id"], []).append(dict(r))
+        for alert in alerts:
+            alert["messages"] = msgs_by_alert.get(alert["id"], [])
+
     conn.close()
-    return [dict(row) for row in rows]
+    return alerts
 
 def get_all_alerts(limit: int = 100, offset: int = 0, status_filter: Optional[str] = None) -> tuple[list[dict], int]:
     """Get all alerts with optional status filter."""
@@ -338,6 +379,52 @@ def update_alert_status(
     conn.close()
 
     return get_alert_by_id(alert_id)
+
+# ============ Alert Messages ============
+
+def create_alert_message(alert_id: int, sender_id: int, sender_role: str, body: str) -> dict:
+    conn = get_conn()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO alert_messages (alert_id, sender_id, sender_role, body) VALUES (?,?,?,?)",
+        (alert_id, sender_id, sender_role, body),
+    )
+    conn.commit()
+    msg_id = cursor.lastrowid
+    cursor.execute("SELECT * FROM alert_messages WHERE id = ?", (msg_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row)
+
+
+def get_messages_for_alert(alert_id: int) -> list[dict]:
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT * FROM alert_messages WHERE alert_id = ? ORDER BY created_at",
+        (alert_id,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_live_alert_summary() -> dict:
+    """Return today's live alert KPIs for the Commissioner summary endpoint."""
+    conn = get_conn()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT
+          COUNT(*)                                                                      AS total,
+          SUM(CASE WHEN status='resolved' AND date(resolved_at)=date('now') THEN 1 ELSE 0 END) AS resolved_today,
+          SUM(CASE WHEN status='pending'    THEN 1 ELSE 0 END)                          AS pending,
+          SUM(CASE WHEN status='dispatched' THEN 1 ELSE 0 END)                          AS dispatched,
+          AVG(CASE WHEN eta_minutes IS NOT NULL THEN eta_minutes END)                   AS avg_eta
+        FROM alerts
+        WHERE date(created_at) = date('now')
+    """)
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else {"total": 0, "resolved_today": 0, "pending": 0, "dispatched": 0, "avg_eta": None}
+
 
 # ============ Location Tracking ============
 

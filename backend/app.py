@@ -20,7 +20,8 @@ from backend.router import assign_patrol_routes, compute_optimal_routing
 from backend.places import discover_venues, get_all_cached_venues
 from backend.export import generate_pdf_report, generate_excel_report
 from backend.auth import (
-    get_current_user, require_officer, require_citizen,
+    get_current_user, require_officer, require_citizen, require_commissioner,
+    require_patrol, require_command,
     verify_password, create_access_token, hash_password
 )
 from backend.database import (
@@ -28,6 +29,7 @@ from backend.database import (
     create_alert, get_alert_by_id, get_alerts_for_citizen,
     get_all_alerts, update_alert_status, upsert_alert_location,
     get_latest_location,
+    create_alert_message, get_messages_for_alert, get_live_alert_summary,
     log_patrol_position, get_last_telemetry, get_patrol_telemetry,
     get_stationary_alerts, get_shift_km,
     create_incident_report, get_incident_report, get_all_reports, escalate_report,
@@ -72,6 +74,7 @@ class LoginResponse(BaseModel):
     role: str
     user_id: int
     full_name: str
+    vehicle_id: Optional[int] = None
 
 # ============ WebSocket Connection Manager ============
 
@@ -591,7 +594,13 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         )
 
     access_token = create_access_token(
-        data={"sub": str(user["id"]), "username": user["username"], "role": user["role"], "full_name": user["full_name"]}
+        data={
+            "sub": str(user["id"]),
+            "username": user["username"],
+            "role": user["role"],
+            "full_name": user["full_name"],
+            "vehicle_id": user.get("vehicle_id"),
+        }
     )
 
     return {
@@ -600,6 +609,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         "role": user["role"],
         "user_id": user["id"],
         "full_name": user["full_name"],
+        "vehicle_id": user.get("vehicle_id"),
     }
 
 
@@ -708,9 +718,9 @@ async def get_all_alerts_endpoint(
     limit: int = 100,
     offset: int = 0,
     status: Optional[str] = None,
-    current_user: dict = Depends(require_officer),
+    current_user: dict = Depends(require_command),
 ):
-    """Get all alerts (officers only)."""
+    """Get all alerts (officers and commissioner)."""
     alerts, total = get_all_alerts(limit=limit, offset=offset, status_filter=status)
     return {"alerts": alerts, "total": total}
 
@@ -943,19 +953,71 @@ def get_my_fop_status(current_user: dict = Depends(require_citizen)):
 
 # ============ WebSocket ============
 
+@app.put("/api/alerts/{alert_id}/accept")
+async def accept_alert(alert_id: int, current_user: dict = Depends(require_patrol)):
+    """Patrol officer confirms they are responding to their dispatched alert."""
+    alert = get_alert_by_id(alert_id)
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    if alert.get("dispatched_vehicle_id") != current_user.get("vehicle_id"):
+        raise HTTPException(status_code=403, detail="This alert is not assigned to your vehicle")
+    updated = update_alert_status(alert_id, status="acknowledged", officer_id=current_user["user_id"])
+    await ws_manager.broadcast({"type": "alert_updated", "alert": updated})
+    return {"alert": updated}
+
+
+@app.post("/api/alerts/{alert_id}/message")
+async def send_patrol_message(alert_id: int, request: dict, current_user: dict = Depends(require_patrol)):
+    """Patrol officer sends a message visible to the citizen."""
+    alert = get_alert_by_id(alert_id)
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    if alert.get("dispatched_vehicle_id") != current_user.get("vehicle_id"):
+        raise HTTPException(status_code=403, detail="This alert is not assigned to your vehicle")
+    body = request.get("body", "").strip()
+    if not body:
+        raise HTTPException(status_code=400, detail="Message body required")
+    msg = create_alert_message(alert_id, current_user["user_id"], "patrol", body)
+    # Broadcast alert_updated so citizen 3s poll picks up the new message
+    await ws_manager.broadcast({"type": "alert_updated", "alert": get_alert_by_id(alert_id)})
+    return {"message": msg}
+
+
+@app.get("/api/alerts/{alert_id}/messages")
+async def get_alert_messages_endpoint(alert_id: int, current_user: dict = Depends(get_current_user)):
+    """Get messages for an alert."""
+    msgs = get_messages_for_alert(alert_id)
+    return {"messages": msgs}
+
+
+@app.get("/api/commissioner/summary")
+async def commissioner_summary(current_user: dict = Depends(require_commissioner)):
+    """Live today KPIs for the Commissioner dashboard."""
+    s = get_live_alert_summary()
+    total = s.get("total") or 0
+    resolved = s.get("resolved_today") or 0
+    return {
+        "today_total": total,
+        "today_resolved": resolved,
+        "today_pending": s.get("pending") or 0,
+        "today_dispatched": s.get("dispatched") or 0,
+        "response_rate_pct": round((resolved / total * 100) if total > 0 else 0.0, 1),
+        "avg_eta_minutes": round(float(s.get("avg_eta") or 0), 1),
+    }
+
+
 @app.websocket("/ws/alerts")
 async def websocket_alerts(websocket: WebSocket, token: str):
-    """WebSocket endpoint for real-time alert updates (officers only)."""
-    # Verify token and role
+    """WebSocket endpoint for real-time alert updates (officers, commissioner, patrol)."""
     try:
         from backend.auth import decode_token
 
         payload = decode_token(token)
-        user_id = payload.get("sub")
         role = payload.get("role")
+        vehicle_id = payload.get("vehicle_id")
 
-        if role != "officer":
-            await websocket.close(code=4003, reason="Forbidden: Officer access required")
+        if role not in ("officer", "commissioner", "patrol"):
+            await websocket.close(code=4003, reason="Forbidden: Command/patrol access required")
             return
     except Exception:
         await websocket.close(code=4001, reason="Unauthorized: Invalid token")
@@ -964,16 +1026,18 @@ async def websocket_alerts(websocket: WebSocket, token: str):
     await ws_manager.connect(websocket)
 
     try:
-        # Send initial state
-        all_alerts, total = get_all_alerts(limit=500)
+        all_alerts, _ = get_all_alerts(limit=500)
+        # Patrol officers only receive their own vehicle's alerts in initial state
+        if role == "patrol" and vehicle_id is not None:
+            initial = [a for a in all_alerts if a.get("dispatched_vehicle_id") == vehicle_id]
+        else:
+            initial = all_alerts
         await websocket.send_text(json.dumps({"type": "connected", "message": "Connected to alert feed"}))
-        await websocket.send_text(json.dumps({"type": "initial_state", "alerts": all_alerts}))
+        await websocket.send_text(json.dumps({"type": "initial_state", "alerts": initial}))
 
-        # Keep connection open
         while True:
             data = await websocket.receive_text()
             msg = json.loads(data)
-
             if msg.get("type") == "ping":
                 await websocket.send_text(json.dumps({"type": "pong"}))
 

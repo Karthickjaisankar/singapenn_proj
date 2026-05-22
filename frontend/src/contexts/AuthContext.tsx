@@ -3,9 +3,10 @@ import React, { createContext, useState, useEffect, ReactNode } from "react";
 export interface AuthUser {
   user_id: number;
   username: string;
-  role: "citizen" | "officer" | "commissioner";
+  role: "citizen" | "officer" | "commissioner" | "patrol";
   full_name: string;
   token: string;
+  vehicle_id?: number;
 }
 
 export interface AuthContextType {
@@ -99,6 +100,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         role: data.role,
         full_name: data.full_name,
         token: data.access_token,
+        vehicle_id: data.vehicle_id ?? undefined,
       };
 
       storage.setItem("singapene_token", data.access_token);
