@@ -31,8 +31,12 @@ const SEVERITY_BADGE: Record<string, string> = {
   other:      "bg-slate-500/20 text-slate-400 border border-slate-500/40",
 };
 
+function parseUTC(iso: string): Date {
+  return new Date(/Z|[+-]\d{2}:/.test(iso) ? iso : iso.replace(" ", "T") + "Z");
+}
+
 function timeAgo(iso: string): string {
-  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  const diff = Math.floor((Date.now() - parseUTC(iso).getTime()) / 1000);
   if (diff < 60) return `${diff}s ago`;
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
   return `${Math.floor(diff / 3600)}h ago`;
@@ -67,10 +71,14 @@ export default function PatrolDashboard() {
   const myMarkerRef = useRef<L.Marker | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Sync messages from alert
+  // Poll messages from API while alert is active
   useEffect(() => {
-    if (myAlert?.messages) setMessages(myAlert.messages);
-  }, [myAlert?.messages]);
+    if (!myAlert?.id || !user?.token) { setMessages([]); return; }
+    const poll = () => api.getAlertMessages(user.token, myAlert.id).then(d => setMessages(d.messages ?? [])).catch(() => {});
+    poll();
+    const id = setInterval(poll, 5000);
+    return () => clearInterval(id);
+  }, [myAlert?.id, user?.token]);
 
   // Elapsed timer since dispatch
   useEffect(() => {

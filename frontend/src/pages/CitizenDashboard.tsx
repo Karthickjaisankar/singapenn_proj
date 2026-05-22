@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { api } from "../api";
-import { AlertRow, AlertType, PatrolVehicle, Crime, PatrolZone, Venue } from "../types";
+import { AlertRow, AlertMessage, AlertType, PatrolVehicle, Crime, PatrolZone, Venue } from "../types";
 import { LogOut, Map, AlertTriangle, FileText, X, CheckCircle2, Clock, Sun, Moon } from "lucide-react";
 import MapComponent from "../components/Map";
 
@@ -81,6 +81,9 @@ export default function CitizenDashboard() {
   const [reportSubmitting, setReportSubmitting] = useState(false);
   const [reportSuccess, setReportSuccess] = useState<number | null>(null);
 
+  // Alert messages (officer ↔ citizen chat)
+  const [alertMessages, setAlertMessages] = useState<AlertMessage[]>([]);
+
   // ── Load map data once ───────────────────────────────────────────────────
   useEffect(() => {
     Promise.all([
@@ -102,6 +105,15 @@ export default function CitizenDashboard() {
     const id = setInterval(fetchVehicles, 10000);
     return () => clearInterval(id);
   }, []);
+
+  // ── Poll messages for active alert every 5s ─────────────────────────────
+  useEffect(() => {
+    if (!activeAlert?.id || !user?.token) { setAlertMessages([]); return; }
+    const poll = () => api.getAlertMessages(user.token, activeAlert.id).then(d => setAlertMessages(d.messages ?? [])).catch(() => {});
+    poll();
+    const id = setInterval(poll, 5000);
+    return () => clearInterval(id);
+  }, [activeAlert?.id, user?.token]);
 
   // ── Poll my alerts every 3s ──────────────────────────────────────────────
   useEffect(() => {
@@ -325,10 +337,10 @@ export default function CitizenDashboard() {
                       <span className="text-base">📍</span>
                       <span>Your exact location has been shared with the officer</span>
                     </div>
-                    {activeAlert?.messages && activeAlert.messages.length > 0 && (
+                    {alertMessages.filter(m => (m as any).sender_role !== "citizen").length > 0 && (
                       <div className="mt-3 space-y-1.5">
                         <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Updates from Officer</p>
-                        {activeAlert.messages.filter(m => (m as any).sender_role !== "citizen").map(m => (
+                        {alertMessages.filter(m => (m as any).sender_role !== "citizen").map(m => (
                           <div key={m.id} className="bg-surface-L2 rounded-xl px-3 py-2 text-sm text-text-primary flex justify-between items-start gap-2">
                             <span>{m.body}</span>
                             <span className="text-[10px] text-text-muted shrink-0">{relTime(m.created_at)}</span>

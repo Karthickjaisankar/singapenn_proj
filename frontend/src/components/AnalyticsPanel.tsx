@@ -10,6 +10,10 @@ import { api } from "../api";
 import { Crime, Stats, PatrolZone, PatrolVehicle, AlertRow } from "../types";
 import KpiCard from "./KpiCard";
 
+function toUTC(iso: string): Date {
+  return new Date(/Z|[+-]\d{2}:/.test(iso) ? iso : iso.replace(" ", "T") + "Z");
+}
+
 // ── Simulated current-month constants ────────────────────────────────────────
 const SIM_MAY_2026 = 22;
 const PROJECTED_2026_FULL = 197;
@@ -154,7 +158,7 @@ export default function AnalyticsPanel({ crimes, patrolZones, vehicles: _vehicle
 
   const windowMs = liveWindow * 3600_000;
   const windowAlerts = useMemo(
-    () => activeAlerts.filter(a => Date.now() - new Date(a.created_at).getTime() <= windowMs),
+    () => activeAlerts.filter(a => Date.now() - toUTC(a.created_at).getTime() <= windowMs),
     [activeAlerts, windowMs],
   );
 
@@ -172,7 +176,7 @@ export default function AnalyticsPanel({ crimes, patrolZones, vehicles: _vehicle
       map[h] = { hour: `${h}:00`, sos: 0, harassment: 0, suspicious: 0, medical: 0, other: 0 };
     }
     windowAlerts.forEach(a => {
-      const h = new Date(a.created_at).getHours();
+      const h = toUTC(a.created_at).getHours();
       const t = a.alert_type as keyof typeof map[0];
       if (t in map[h]) (map[h] as any)[t]++;
     });
@@ -197,7 +201,7 @@ export default function AnalyticsPanel({ crimes, patrolZones, vehicles: _vehicle
     const resolved = windowAlerts.filter(a => a.status === "resolved" && a.resolved_at);
     if (resolved.length < 3) return null;
     const sum = resolved.reduce((acc, a) => {
-      return acc + (new Date(a.resolved_at!).getTime() - new Date(a.created_at).getTime()) / 60000;
+      return acc + (toUTC(a.resolved_at!).getTime() - toUTC(a.created_at).getTime()) / 60000;
     }, 0);
     return Math.round(sum / resolved.length);
   }, [windowAlerts]);

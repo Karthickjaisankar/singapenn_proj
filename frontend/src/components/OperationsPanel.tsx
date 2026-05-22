@@ -16,7 +16,8 @@ const CRIME_HEAD_OPTIONS = [
 const MANDATORY_FIR_HEADS = new Set(["pocso_rape", "child_marriage_rape", "sc_st_rape"]);
 
 function timeAgo(dateStr: string) {
-  const diff = Date.now() - new Date(dateStr).getTime();
+  const utc = /Z|[+-]\d{2}:/.test(dateStr) ? dateStr : dateStr.replace(" ", "T") + "Z";
+  const diff = Date.now() - new Date(utc).getTime();
   const m = Math.floor(diff / 60000);
   if (m < 60) return `${m}m ago`;
   const h = Math.floor(m / 60);

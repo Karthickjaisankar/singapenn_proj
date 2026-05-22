@@ -23,7 +23,8 @@ const STATUS_CONFIG: Record<string, { dot: string; badge: string; label: string 
 };
 
 function relTime(iso: string) {
-  const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  const utc = /Z|[+-]\d{2}:/.test(iso) ? iso : iso.replace(" ", "T") + "Z";
+  const m = Math.floor((Date.now() - new Date(utc).getTime()) / 60000);
   if (m < 1) return "just now";
   if (m < 60) return `${m}m ago`;
   return `${Math.floor(m / 60)}h ago`;

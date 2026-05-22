@@ -33,14 +33,18 @@ export function usePatrolAlerts(token: string, vehicleId: number) {
             const msg: WSMessage = JSON.parse(event.data);
 
             if (msg.type === "initial_state" && msg.alerts) {
-              const mine = msg.alerts.find(a => a.dispatched_vehicle_id === vehicleId) ?? null;
+              const mine = msg.alerts.find(
+                a => a.dispatched_vehicle_id === vehicleId &&
+                     a.status !== "resolved" && a.status !== "cancelled"
+              ) ?? null;
               setMyAlert(mine);
             } else if (msg.type === "alert_updated" && msg.alert) {
               const a = msg.alert;
-              if (a.dispatched_vehicle_id === vehicleId) {
+              const isResolved = a.status === "resolved" || a.status === "cancelled";
+              if (a.dispatched_vehicle_id === vehicleId && !isResolved) {
                 setMyAlert(a);
               } else {
-                // Alert was un-assigned from this vehicle or resolved
+                // Alert resolved, cancelled, or un-assigned from this vehicle
                 setMyAlert(prev => (prev?.id === a.id ? null : prev));
               }
             } else if (msg.type === "alert_created" && msg.alert) {
