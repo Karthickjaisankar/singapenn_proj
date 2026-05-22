@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useMemo } from "react";
 import L from "leaflet";
 import { api } from "../api";
 import { PatrolTrackPoint } from "../types";
-import { Navigation, Clock, Activity, MapPin, Phone, User } from "lucide-react";
+import { Navigation, Clock, MapPin, Phone, User, ShieldCheck, Users } from "lucide-react";
 
 const VEHICLE_COLORS: Record<number, string> = {
   1: "#3b82f6",
@@ -11,15 +11,81 @@ const VEHICLE_COLORS: Record<number, string> = {
   4: "#f59e0b",
 };
 
-const OFFICER_INFO: Record<number, { name: string; phone: string }> = {
-  1: { name: "Const. Ravi Kumar",   phone: "9841000021" },
-  2: { name: "Const. Kavitha Devi", phone: "9841000022" },
-  3: { name: "Const. Arjun Singh",  phone: "9841000023" },
-  4: { name: "Const. Meena Rani",   phone: "9841000024" },
+// All personnel per patrol vehicle
+const PATROL_PERSONNEL: Record<number, { name: string; rank: string; phone: string }[]> = {
+  1: [
+    { name: "HC Ravi Kumar",      rank: "Head Constable", phone: "9841000021" },
+    { name: "Const. Divya Priya", rank: "Constable",      phone: "9841000025" },
+    { name: "Const. Suresh Babu", rank: "Constable",      phone: "9841000029" },
+  ],
+  2: [
+    { name: "HC Kavitha Devi",     rank: "Head Constable", phone: "9841000022" },
+    { name: "Const. Selvi Lakshmi",rank: "Constable",      phone: "9841000026" },
+    { name: "Const. Priya Rajan",  rank: "Constable",      phone: "9841000030" },
+  ],
+  3: [
+    { name: "ASI Arjun Singh",     rank: "ASI",            phone: "9841000023" },
+    { name: "Const. Meenakshi R",  rank: "Constable",      phone: "9841000027" },
+  ],
+  4: [
+    { name: "Const. Meena Rani",   rank: "Constable",      phone: "9841000024" },
+    { name: "Const. Vasantha D",   rank: "Constable",      phone: "9841000028" },
+    { name: "Const. Anitha Kumar", rank: "Constable",      phone: "9841000031" },
+  ],
+};
+
+type CrimeType = "Harassment" | "Suspicious Activity" | "SOS" | "Medical Emergency";
+type ReportOutcome = "DSR" | "CSR";
+
+interface ComplaintRecord {
+  id: string;
+  type: CrimeType;
+  outcome: ReportOutcome;
+  area: string;
+  time: string;
+}
+
+// Simulated complaints attended per vehicle today
+const PATROL_COMPLAINTS: Record<number, ComplaintRecord[]> = {
+  1: [
+    { id: "A-201", type: "Suspicious Activity", outcome: "DSR", area: "Vandalur Junction",    time: "08:45 am" },
+    { id: "A-204", type: "Harassment",           outcome: "CSR", area: "Mudichur Bus Stop",    time: "10:20 am" },
+    { id: "A-211", type: "Suspicious Activity",  outcome: "DSR", area: "GST Road, Vandalur",   time: "01:15 pm" },
+  ],
+  2: [
+    { id: "A-202", type: "SOS",               outcome: "CSR", area: "Meenambakkam Metro",   time: "09:10 am" },
+    { id: "A-207", type: "Harassment",        outcome: "DSR", area: "Pallavaram Market",     time: "11:40 am" },
+    { id: "A-215", type: "Medical Emergency", outcome: "DSR", area: "Tirusulam Junction",    time: "02:55 pm" },
+  ],
+  3: [
+    { id: "A-203", type: "Harassment", outcome: "CSR", area: "Perungalathur Main Rd", time: "09:30 am" },
+    { id: "A-209", type: "SOS",        outcome: "CSR", area: "Chromepet Tank Road",   time: "12:15 pm" },
+  ],
+  4: [
+    { id: "A-205", type: "Suspicious Activity", outcome: "DSR", area: "Semmenchery Nagar",    time: "08:55 am" },
+    { id: "A-208", type: "Harassment",          outcome: "CSR", area: "Semmenchery East",      time: "11:00 am" },
+    { id: "A-213", type: "SOS",                 outcome: "CSR", area: "Okkiyam Thoraipakkam",  time: "01:50 pm" },
+    { id: "A-217", type: "Suspicious Activity", outcome: "DSR", area: "Perungudi Main Road",   time: "03:30 pm" },
+  ],
+};
+
+// Named hotspot locations per vehicle — derived from seed data stop coordinates
+const HOTSPOT_NAMES: Record<number, string[]> = {
+  1: ["Vandalur Zoo Gate", "Mudichur Road Junction"],
+  2: ["Tirusulam Signal", "Pallavaram Flyover"],
+  3: ["Chromepet Railway Crossing", "Perungalathur Police Outpost"],
+  4: ["Semmenchery Bus Terminus", "Thoraipakkam OMR Junction"],
+};
+
+const CRIME_TYPE_COLORS: Record<CrimeType, string> = {
+  "Harassment":           "#ef4444",
+  "Suspicious Activity":  "#f59e0b",
+  "SOS":                  "#3b82f6",
+  "Medical Emergency":    "#10b981",
 };
 
 const MAP_CENTER: [number, number] = [12.9349, 80.1706];
-const MAX_JUMP_KM = 2.0; // teleport threshold — skip drawing line segments longer than this
+const MAX_JUMP_KM = 2.0;
 
 function haversine(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
@@ -38,17 +104,17 @@ interface Hotspot {
   lng: number;
   durationMin: number;
   startTime: string;
+  name: string;
 }
 
 interface TrailStats {
   distanceKm: number;
   patrollingMin: number;
-  pointCount: number;
   hotspots: Hotspot[];
 }
 
-function computeStats(pts: PatrolTrackPoint[]): TrailStats {
-  if (pts.length < 2) return { distanceKm: 0, patrollingMin: 0, pointCount: pts.length, hotspots: [] };
+function computeStats(pts: PatrolTrackPoint[], vehicleId: number): TrailStats {
+  if (pts.length < 2) return { distanceKm: 0, patrollingMin: 0, hotspots: [] };
 
   const sorted = [...pts].sort(
     (a, b) =>
@@ -67,11 +133,10 @@ function computeStats(pts: PatrolTrackPoint[]): TrailStats {
 
   const patrollingMin = Math.round((toMs(sorted[sorted.length - 1].recorded_at) - toMs(sorted[0].recorded_at)) / 60000);
 
-  // Hotspot detection: compare each point to where the vehicle was 30 min earlier.
-  // If displacement < 150m over 30 min the vehicle was effectively stationary (not patrolling).
-  const LOOKBACK_MS = 30 * 60 * 1000; // 30-minute window
-  const STOP_RADIUS_KM = 0.15;         // 150m — distinguishes slow patrol oval from true stop
+  const LOOKBACK_MS = 30 * 60 * 1000;
+  const STOP_RADIUS_KM = 0.15;
   const hotspots: Hotspot[] = [];
+  const names = HOTSPOT_NAMES[vehicleId] ?? [];
   let stopStartIdx = 0;
   let inStop = false;
   let stopLats: number[] = [];
@@ -79,10 +144,9 @@ function computeStats(pts: PatrolTrackPoint[]): TrailStats {
 
   for (let i = 0; i < sorted.length; i++) {
     const tNow = toMs(sorted[i].recorded_at);
-    // Find the point ~30 min ago
     let refIdx = i;
     while (refIdx > 0 && tNow - toMs(sorted[refIdx].recorded_at) < LOOKBACK_MS) refIdx--;
-    if (refIdx === i) { continue; } // not enough history yet
+    if (refIdx === i) continue;
     const d = haversine(sorted[refIdx].lat, sorted[refIdx].lng, sorted[i].lat, sorted[i].lng);
     const isStopped = d < STOP_RADIUS_KM;
 
@@ -97,11 +161,13 @@ function computeStats(pts: PatrolTrackPoint[]): TrailStats {
     } else if (!isStopped && inStop) {
       const durationMin = Math.round((toMs(sorted[i - 1].recorded_at) - toMs(sorted[stopStartIdx].recorded_at)) / 60000);
       if (durationMin >= 30) {
+        const idx = hotspots.length;
         hotspots.push({
           lat: stopLats.reduce((s, v) => s + v, 0) / stopLats.length,
           lng: stopLngs.reduce((s, v) => s + v, 0) / stopLngs.length,
           durationMin,
           startTime: sorted[stopStartIdx].recorded_at,
+          name: names[idx] ?? `Area ${idx + 1}`,
         });
       }
       inStop = false;
@@ -112,21 +178,18 @@ function computeStats(pts: PatrolTrackPoint[]): TrailStats {
   if (inStop && stopLats.length > 0) {
     const durationMin = Math.round((toMs(sorted[sorted.length - 1].recorded_at) - toMs(sorted[stopStartIdx].recorded_at)) / 60000);
     if (durationMin >= 30) {
+      const idx = hotspots.length;
       hotspots.push({
         lat: stopLats.reduce((s, v) => s + v, 0) / stopLats.length,
         lng: stopLngs.reduce((s, v) => s + v, 0) / stopLngs.length,
         durationMin,
         startTime: sorted[stopStartIdx].recorded_at,
+        name: names[idx] ?? `Area ${idx + 1}`,
       });
     }
   }
 
-  return {
-    distanceKm: Math.round(distanceKm * 10) / 10,
-    patrollingMin,
-    pointCount: sorted.length,
-    hotspots,
-  };
+  return { distanceKm: Math.round(distanceKm * 10) / 10, patrollingMin, hotspots };
 }
 
 function fmtDuration(min: number): string {
@@ -154,7 +217,6 @@ export default function PatrolTrailsView({ token }: Props) {
   const startMarkerRef = useRef<L.CircleMarker | null>(null);
   const endMarkerRef = useRef<L.CircleMarker | null>(null);
 
-  // Fetch tracks once
   useEffect(() => {
     setLoading(true);
     api.allPatrolTracks(token)
@@ -163,31 +225,20 @@ export default function PatrolTrailsView({ token }: Props) {
       .finally(() => setLoading(false));
   }, [token]);
 
-  // Initialize map
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
-    mapRef.current = L.map(mapContainerRef.current, {
-      center: MAP_CENTER,
-      zoom: 13,
-      zoomControl: true,
-    });
+    mapRef.current = L.map(mapContainerRef.current, { center: MAP_CENTER, zoom: 13 });
     L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
       attribution: "© OpenStreetMap © CARTO",
       subdomains: "abcd",
       maxZoom: 19,
     }).addTo(mapRef.current);
-
-    return () => {
-      mapRef.current?.remove();
-      mapRef.current = null;
-    };
+    return () => { mapRef.current?.remove(); mapRef.current = null; };
   }, []);
 
-  // Render trail for selected vehicle
   useEffect(() => {
     if (!mapRef.current) return;
 
-    // Clear previous layers
     trailRef.current.forEach(l => mapRef.current!.removeLayer(l));
     trailRef.current = [];
     hotspotLayersRef.current.forEach(l => mapRef.current!.removeLayer(l));
@@ -205,7 +256,6 @@ export default function PatrolTrailsView({ token }: Props) {
         new Date((/Z|[+-]\d{2}:/.test(b.recorded_at) ? b.recorded_at : b.recorded_at.replace(" ", "T") + "Z")).getTime()
     );
 
-    // Collect all segments, break on teleport jumps > MAX_JUMP_KM
     const allSegments: { pts: [number, number][]; endIdx: number }[] = [];
     let segment: [number, number][] = [[sorted[0].lat, sorted[0].lng]];
     for (let i = 1; i < sorted.length; i++) {
@@ -219,7 +269,6 @@ export default function PatrolTrailsView({ token }: Props) {
     }
     if (segment.length > 1) allSegments.push({ pts: segment, endIdx: sorted.length - 1 });
 
-    // Draw only the longest segment (main patrol route), ignore tiny post-teleport orphans
     const mainSeg = allSegments.reduce((a, b) => a.pts.length >= b.pts.length ? a : b, { pts: [], endIdx: 0 });
     allSegments.forEach(s => {
       const isMain = s === mainSeg;
@@ -230,51 +279,48 @@ export default function PatrolTrailsView({ token }: Props) {
     });
     const lastValidPoint = mainSeg.pts.length > 0 ? sorted[mainSeg.endIdx] : sorted[0];
 
-    // Start marker (green dot)
     startMarkerRef.current = L.circleMarker([sorted[0].lat, sorted[0].lng], {
       radius: 7, fillColor: "#22c55e", fillOpacity: 1, color: "#fff", weight: 2,
-    }).addTo(mapRef.current).bindTooltip("Start of shift", { direction: "top" });
+    }).addTo(mapRef.current).bindTooltip("Shift start", { direction: "top" });
 
-    // End marker — use last point of the connected trail (skip teleport jumps)
+    const personnel = PATROL_PERSONNEL[selectedVehicle] ?? [];
     endMarkerRef.current = L.circleMarker([lastValidPoint.lat, lastValidPoint.lng], {
       radius: 8, fillColor: color, fillOpacity: 1, color: "#fff", weight: 2,
-    }).addTo(mapRef.current).bindTooltip(`Current position`, { direction: "top" });
-    endMarkerRef.current.bindPopup(`
-      <div style="min-width:180px;font-size:12px">
-        <div style="font-weight:700;color:${color};font-size:13px;margin-bottom:6px">Patrol ${selectedVehicle}</div>
-        <div style="color:#94a3b8;line-height:1.8">
-          <div>👮 ${OFFICER_INFO[selectedVehicle].name}</div>
-          <div>📞 ${OFFICER_INFO[selectedVehicle].phone}</div>
-          <div>⏱ Last seen: ${fmtTime(lastValidPoint.recorded_at)}</div>
+    }).addTo(mapRef.current).bindPopup(`
+      <div style="min-width:200px;font-size:12px">
+        <div style="font-weight:700;color:${color};font-size:13px;margin-bottom:8px">Patrol ${selectedVehicle}</div>
+        <div style="color:#94a3b8;line-height:2">
+          ${personnel.map(p => `<div>👮 ${p.name} · <span style="color:#64748b">${p.rank}</span></div>`).join("")}
+          <div style="margin-top:4px">⏱ Last seen: ${fmtTime(lastValidPoint.recorded_at)}</div>
         </div>
       </div>
     `);
 
-    // Hotspot circles
-    const { hotspots } = computeStats(pts);
+    // Hotspot circles with area names
+    const { hotspots } = computeStats(pts, selectedVehicle);
     hotspots.forEach((hs, idx) => {
       const cm = L.circleMarker([hs.lat, hs.lng], {
-        radius: 16,
+        radius: 20,
         fillColor: "#f59e0b",
-        fillOpacity: 0.25,
+        fillOpacity: 0.18,
         color: "#f59e0b",
-        weight: 3,
-        dashArray: undefined,
+        weight: 2.5,
       })
         .addTo(mapRef.current!)
+        .bindTooltip(hs.name, { permanent: true, className: "hotspot-label", direction: "top", offset: [0, -18] })
         .bindPopup(
           `<div style="font-size:12px">
-            <div style="font-weight:700;color:#f59e0b">Hotspot ${idx + 1}</div>
-            <div style="color:#94a3b8;margin-top:4px">
-              <div>⏱ ${fmtDuration(hs.durationMin)} stationary</div>
+            <div style="font-weight:700;color:#f59e0b;font-size:13px">${hs.name}</div>
+            <div style="color:#94a3b8;margin-top:6px;line-height:1.8">
+              <div>⏱ Stationary for ${fmtDuration(hs.durationMin)}</div>
               <div>🕐 From ${fmtTime(hs.startTime)}</div>
+              <div style="margin-top:4px;font-size:10px;color:#64748b">Stop #${idx + 1} of shift</div>
             </div>
           </div>`
         );
       hotspotLayersRef.current.push(cm);
     });
 
-    // Fit map to main segment bounds
     if (mainSeg.pts.length > 1) {
       mapRef.current.fitBounds(L.latLngBounds(mainSeg.pts).pad(0.2));
     }
@@ -283,26 +329,33 @@ export default function PatrolTrailsView({ token }: Props) {
   const stats = useMemo(() => {
     const pts = tracks[selectedVehicle];
     if (!pts) return null;
-    return computeStats(pts);
+    return computeStats(pts, selectedVehicle);
   }, [tracks, selectedVehicle]);
 
   const color = VEHICLE_COLORS[selectedVehicle];
-  const officer = OFFICER_INFO[selectedVehicle];
+  const personnel = PATROL_PERSONNEL[selectedVehicle] ?? [];
+  const complaints = PATROL_COMPLAINTS[selectedVehicle] ?? [];
+  const dsrCount = complaints.filter(c => c.outcome === "DSR").length;
+  const csrCount = complaints.filter(c => c.outcome === "CSR").length;
+
+  // Crime type breakdown
+  const crimeBreakdown = complaints.reduce<Record<string, number>>((acc, c) => {
+    acc[c.type] = (acc[c.type] ?? 0) + 1;
+    return acc;
+  }, {});
 
   return (
     <div className="flex flex-col h-full bg-bg-dark overflow-hidden">
       {/* Vehicle selector bar */}
       <div className="bg-surface-L1 border-b border-border px-5 py-3 flex items-center gap-3 shrink-0">
-        <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Select Vehicle</span>
+        <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Select Patrol</span>
         <div className="flex items-center bg-surface-L2 rounded-lg p-0.5 gap-0.5">
           {([1, 2, 3, 4] as const).map(id => (
             <button
               key={id}
               onClick={() => setSelectedVehicle(id)}
               className={`px-3 py-1.5 rounded-md text-xs font-bold transition ${
-                selectedVehicle === id
-                  ? "text-white shadow"
-                  : "text-text-secondary hover:text-text-primary"
+                selectedVehicle === id ? "text-white shadow" : "text-text-secondary hover:text-text-primary"
               }`}
               style={selectedVehicle === id ? { background: VEHICLE_COLORS[id] } : undefined}
             >
@@ -317,7 +370,6 @@ export default function PatrolTrailsView({ token }: Props) {
           </span>
         )}
         <div className="flex-1" />
-        {/* Legend */}
         <div className="flex items-center gap-4 text-[10px] text-text-muted">
           <div className="flex items-center gap-1.5">
             <div className="w-6 h-1.5 rounded-full" style={{ background: color }} />
@@ -325,7 +377,7 @@ export default function PatrolTrailsView({ token }: Props) {
           </div>
           <div className="flex items-center gap-1.5">
             <div className="w-3 h-3 rounded-full" style={{ background: "#f59e0b", opacity: 0.7 }} />
-            <span>Hotspot (&gt;30 min)</span>
+            <span>Stationary area</span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="w-3 h-3 rounded-full bg-green-500" />
@@ -334,7 +386,7 @@ export default function PatrolTrailsView({ token }: Props) {
         </div>
       </div>
 
-      {/* Map + Analytics */}
+      {/* Map + Sidebar */}
       <div className="flex flex-1 overflow-hidden">
         {/* Map */}
         <div className="flex-1 overflow-hidden relative">
@@ -342,25 +394,38 @@ export default function PatrolTrailsView({ token }: Props) {
         </div>
 
         {/* Analytics sidebar */}
-        <div className="w-[280px] shrink-0 bg-surface-L1 border-l border-border overflow-y-auto">
-          {/* Officer info */}
+        <div className="w-[300px] shrink-0 bg-surface-L1 border-l border-border overflow-y-auto">
+
+          {/* Vehicle + Personnel header */}
           <div className="px-4 pt-4 pb-3 border-b border-border">
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-3">
               <div className="w-2 h-2 rounded-full shrink-0 animate-pulse" style={{ background: color }} />
               <span className="text-sm font-black text-text-primary">Patrol {selectedVehicle}</span>
+              <span className="ml-auto text-[10px] font-bold text-text-muted bg-surface-L2 px-2 py-0.5 rounded-full border border-border">
+                {personnel.length} on duty
+              </span>
             </div>
-            <div className="flex items-center gap-2 text-[11px] text-text-secondary mb-1">
-              <User className="w-3.5 h-3.5 shrink-0" />
-              <span>{officer.name}</span>
-            </div>
-            <div className="flex items-center gap-2 text-[11px] text-text-secondary">
-              <Phone className="w-3.5 h-3.5 shrink-0" />
-              <span>{officer.phone}</span>
+            <div className="space-y-1.5">
+              {personnel.map((p, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-surface-L2 border border-border flex items-center justify-center shrink-0">
+                    <User className="w-3 h-3 text-text-muted" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] font-semibold text-text-primary truncate">{p.name}</p>
+                    <p className="text-[9px] text-text-muted">{p.rank}</p>
+                  </div>
+                  <a href={`tel:${p.phone}`} className="flex items-center gap-1 text-[9px] text-text-muted hover:text-blue-400 transition">
+                    <Phone className="w-2.5 h-2.5" />
+                    {p.phone}
+                  </a>
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* Stats */}
-          <div className="px-4 py-3 grid grid-cols-2 gap-2.5">
+          {/* KPI grid */}
+          <div className="px-4 py-3 grid grid-cols-2 gap-2">
             <div className="rounded-xl bg-surface-L2 border border-border px-3 py-2.5">
               <div className="flex items-center gap-1.5 mb-0.5">
                 <Navigation className="w-3 h-3 text-blue-400" />
@@ -381,44 +446,92 @@ export default function PatrolTrailsView({ token }: Props) {
             </div>
             <div className="rounded-xl bg-surface-L2 border border-border px-3 py-2.5">
               <div className="flex items-center gap-1.5 mb-0.5">
-                <Activity className="w-3 h-3 text-violet-400" />
-                <span className="text-[9px] font-bold uppercase tracking-widest text-text-muted">Data Points</span>
+                <Users className="w-3 h-3 text-violet-400" />
+                <span className="text-[9px] font-bold uppercase tracking-widest text-text-muted">Personnel</span>
               </div>
-              <p className="text-xl font-black text-text-primary tabular-nums">{stats?.pointCount ?? "—"}</p>
-              <p className="text-[10px] text-text-muted">GPS pings</p>
+              <p className="text-xl font-black text-text-primary tabular-nums">{personnel.length}</p>
+              <p className="text-[10px] text-text-muted">officers on duty</p>
             </div>
             <div className="rounded-xl bg-surface-L2 border border-border px-3 py-2.5">
               <div className="flex items-center gap-1.5 mb-0.5">
-                <MapPin className="w-3 h-3 text-amber-400" />
-                <span className="text-[9px] font-bold uppercase tracking-widest text-text-muted">Hotspots</span>
+                <ShieldCheck className="w-3 h-3 text-amber-400" />
+                <span className="text-[9px] font-bold uppercase tracking-widest text-text-muted">Complaints</span>
               </div>
-              <p className="text-xl font-black text-text-primary tabular-nums">{stats?.hotspots.length ?? "—"}</p>
-              <p className="text-[10px] text-text-muted">stops &gt;30 min</p>
+              <p className="text-xl font-black text-text-primary tabular-nums">{complaints.length}</p>
+              <p className="text-[10px] text-text-muted">attended today</p>
             </div>
           </div>
 
-          {/* Hotspot list */}
-          <div className="px-4 pb-4">
-            <p className="text-[9px] font-bold uppercase tracking-widest text-text-muted mb-2">Stationary Locations</p>
-            {!stats || stats.hotspots.length === 0 ? (
-              <div className="text-[11px] text-text-muted text-center py-6 bg-surface-L2 rounded-xl border border-border">
-                No stops &gt; 30 min detected
+          {/* DSR / CSR summary */}
+          <div className="px-4 pb-3">
+            <div className="flex gap-2">
+              <div className="flex-1 rounded-xl bg-blue-500/5 border border-blue-500/20 px-3 py-2.5 text-center">
+                <p className="text-[9px] font-bold uppercase tracking-widest text-blue-400 mb-1">DSR Filed</p>
+                <p className="text-2xl font-black text-blue-300 tabular-nums">{dsrCount}</p>
+                <p className="text-[9px] text-text-muted mt-0.5">No crime found</p>
+              </div>
+              <div className="flex-1 rounded-xl bg-red-500/5 border border-red-500/20 px-3 py-2.5 text-center">
+                <p className="text-[9px] font-bold uppercase tracking-widest text-red-400 mb-1">CSR Filed</p>
+                <p className="text-2xl font-black text-red-300 tabular-nums">{csrCount}</p>
+                <p className="text-[9px] text-text-muted mt-0.5">Crime confirmed</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Crime types */}
+          {Object.keys(crimeBreakdown).length > 0 && (
+            <div className="px-4 pb-3 border-t border-border pt-3">
+              <p className="text-[9px] font-bold uppercase tracking-widest text-text-muted mb-2">Crime Types Attended</p>
+              <div className="space-y-1.5">
+                {(Object.entries(crimeBreakdown) as [CrimeType, number][]).map(([type, count]) => {
+                  const pct = Math.round((count / complaints.length) * 100);
+                  const tc = CRIME_TYPE_COLORS[type] ?? "#6b7280";
+                  return (
+                    <div key={type}>
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="text-[10px] font-semibold text-text-secondary">{type}</span>
+                        <span className="text-[10px] font-black text-text-primary tabular-nums">{count}</span>
+                      </div>
+                      <div className="w-full h-1.5 rounded-full bg-surface-L2 overflow-hidden">
+                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: tc }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Complaints list */}
+          <div className="px-4 pb-3 border-t border-border pt-3">
+            <p className="text-[9px] font-bold uppercase tracking-widest text-text-muted mb-2">Complaints Attended</p>
+            {complaints.length === 0 ? (
+              <div className="text-[11px] text-text-muted text-center py-4 bg-surface-L2 rounded-xl border border-border">
+                No complaints attended today
               </div>
             ) : (
-              <div className="space-y-2">
-                {stats.hotspots.map((hs, i) => (
-                  <div key={i} className="rounded-xl bg-amber-500/5 border border-amber-500/20 px-3 py-2.5">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] font-bold text-amber-400">Hotspot {i + 1}</span>
-                      <span className="text-[10px] font-black text-text-primary tabular-nums">
-                        {fmtDuration(hs.durationMin)}
-                      </span>
-                    </div>
-                    <div className="text-[10px] text-text-muted">
-                      <div>From {fmtTime(hs.startTime)}</div>
-                      <div className="mt-0.5 font-mono">
-                        {hs.lat.toFixed(4)}, {hs.lng.toFixed(4)}
+              <div className="space-y-1.5">
+                {complaints.map(c => (
+                  <div key={c.id} className="rounded-xl bg-surface-L2 border border-border px-3 py-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: CRIME_TYPE_COLORS[c.type] ?? "#6b7280" }} />
+                          <span className="text-[10px] font-bold text-text-primary truncate">{c.type}</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-[9px] text-text-muted">
+                          <MapPin className="w-2.5 h-2.5 shrink-0" />
+                          <span className="truncate">{c.area}</span>
+                        </div>
+                        <div className="text-[9px] text-text-muted mt-0.5">{c.time} · {c.id}</div>
                       </div>
+                      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded shrink-0 ${
+                        c.outcome === "CSR"
+                          ? "bg-red-500/15 text-red-400 border border-red-500/30"
+                          : "bg-blue-500/15 text-blue-400 border border-blue-500/30"
+                      }`}>
+                        {c.outcome}
+                      </span>
                     </div>
                   </div>
                 ))}
@@ -426,14 +539,38 @@ export default function PatrolTrailsView({ token }: Props) {
             )}
           </div>
 
-          {/* All-vehicles summary */}
-          <div className="px-4 pb-4 pt-1 border-t border-border">
+          {/* Stationary locations */}
+          <div className="px-4 pb-3 border-t border-border pt-3">
+            <p className="text-[9px] font-bold uppercase tracking-widest text-text-muted mb-2">Stationary Areas</p>
+            {!stats || stats.hotspots.length === 0 ? (
+              <div className="text-[11px] text-text-muted text-center py-4 bg-surface-L2 rounded-xl border border-border">
+                No stops &gt; 30 min detected
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {stats.hotspots.map((hs, i) => (
+                  <div key={i} className="rounded-xl bg-amber-500/5 border border-amber-500/20 px-3 py-2">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="text-[10px] font-bold text-amber-400">{hs.name}</span>
+                      <span className="text-[10px] font-black text-text-primary tabular-nums">{fmtDuration(hs.durationMin)}</span>
+                    </div>
+                    <p className="text-[9px] text-text-muted">From {fmtTime(hs.startTime)}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Fleet overview */}
+          <div className="px-4 pb-4 border-t border-border pt-3">
             <p className="text-[9px] font-bold uppercase tracking-widest text-text-muted mb-2">Fleet Overview</p>
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               {([1, 2, 3, 4] as const).map(id => {
                 const pts = tracks[id];
-                const s = pts ? computeStats(pts) : null;
+                const s = pts ? computeStats(pts, id) : null;
                 const c = VEHICLE_COLORS[id];
+                const crew = PATROL_PERSONNEL[id] ?? [];
+                const jobs = PATROL_COMPLAINTS[id] ?? [];
                 return (
                   <button
                     key={id}
@@ -444,8 +581,11 @@ export default function PatrolTrailsView({ token }: Props) {
                     style={selectedVehicle === id ? { outline: `1.5px solid ${c}`, outlineOffset: "-1.5px" } : undefined}
                   >
                     <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: c }} />
-                    <span className="text-[11px] font-bold text-text-primary">Patrol {id}</span>
-                    <span className="ml-auto text-[11px] text-text-muted tabular-nums">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-bold text-text-primary">Patrol {id}</p>
+                      <p className="text-[9px] text-text-muted">{crew.length} officers · {jobs.length} complaints</p>
+                    </div>
+                    <span className="text-[11px] text-text-muted tabular-nums shrink-0">
                       {s ? `${s.distanceKm} km` : "—"}
                     </span>
                   </button>
