@@ -5,7 +5,7 @@ import { Sun, Moon, RotateCcw } from "lucide-react";
 type Persona = "citizen" | "officer" | "patrol";
 
 const PERSONA_LABEL: Record<Persona, string> = {
-  citizen: "👩  Citizen — Ananya Krishnan",
+  citizen: "👩  Citizen — Anita Krishnan",
   officer: "🛡️  Control Room — SI Murugan",
   patrol:  "🚔  Patrol PPV-1 — Const. Ravi Kumar",
 };

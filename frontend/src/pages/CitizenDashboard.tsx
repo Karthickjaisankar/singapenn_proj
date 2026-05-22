@@ -111,7 +111,7 @@ export default function CitizenDashboard() {
     if (!activeAlert?.id || !user?.token) { setAlertMessages([]); return; }
     const poll = () => api.getAlertMessages(user.token, activeAlert.id).then(d => setAlertMessages(d.messages ?? [])).catch(() => {});
     poll();
-    const id = setInterval(poll, 5000);
+    const id = setInterval(poll, 2000);
     return () => clearInterval(id);
   }, [activeAlert?.id, user?.token]);
 
@@ -347,32 +347,46 @@ export default function CitizenDashboard() {
                       <span className="text-base">📍</span>
                       <span>Your exact location has been shared with the officer</span>
                     </div>
-                    {alertMessages.filter(m => (m as any).sender_role !== "citizen").length > 0 && (
-                      <div className="mt-3 space-y-1.5">
-                        <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Updates from Officer</p>
-                        {alertMessages.filter(m => (m as any).sender_role !== "citizen").map(m => (
-                          <div key={m.id} className="bg-surface-L2 rounded-xl px-3 py-2 text-sm text-text-primary flex justify-between items-start gap-2">
-                            <span>{m.body}</span>
-                            <span className="text-[10px] text-text-muted shrink-0">{relTime(m.created_at)}</span>
-                          </div>
-                        ))}
+                    {/* ── 2-way chat ── */}
+                    <div className="mt-3 border border-border rounded-2xl overflow-hidden">
+                      <div className="px-3 py-2 bg-surface-L2 border-b border-border flex items-center gap-1.5">
+                        <span className="text-base">💬</span>
+                        <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Chat with Officer</p>
                       </div>
-                    )}
-                    <div className="border-t border-border pt-3 mt-2">
-                      <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">
-                        Send Update to Officer
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {["I'm in trouble","I'm being harassed","I'm injured","I need immediate help",
-                          "I cannot speak","Please hurry","I'm hiding","I'm safe — still need help"
-                        ].map(msg => (
-                          <button key={msg} onClick={() => sendCitizenPreset(msg)} disabled={sendingPreset}
-                            className="text-[11px] font-semibold px-2.5 py-1 rounded-full
-                                       bg-green-500/15 border border-green-500/30 text-green-300
-                                       hover:bg-green-500/25 transition disabled:opacity-40 active:scale-95">
-                            {msg}
-                          </button>
-                        ))}
+                      <div className="px-3 py-2 space-y-2 max-h-40 overflow-y-auto bg-surface-L1">
+                        {alertMessages.length === 0 && (
+                          <p className="text-text-muted text-xs text-center py-3">No messages yet</p>
+                        )}
+                        {alertMessages.map(m => {
+                          const mine = (m as any).sender_role === "citizen";
+                          return (
+                            <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                              <div className={`text-sm px-3 py-1.5 rounded-2xl max-w-[85%] ${
+                                mine
+                                  ? "bg-green-600 text-white rounded-tr-sm"
+                                  : "bg-blue-600/20 border border-blue-500/30 text-blue-200 rounded-tl-sm"
+                              }`}>
+                                {!mine && <p className="text-[9px] text-blue-400 font-bold mb-0.5">OFFICER</p>}
+                                <p className="leading-snug">{m.body}</p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="px-3 py-2 border-t border-border bg-surface-L2">
+                        <p className="text-[10px] text-text-muted mb-1.5 font-semibold">Tap to send:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {["I'm in trouble","I'm being harassed","I'm injured","I need immediate help",
+                            "I cannot speak","Please hurry","I'm hiding","I'm safe — still need help"
+                          ].map(msg => (
+                            <button key={msg} onClick={() => sendCitizenPreset(msg)} disabled={sendingPreset}
+                              className="text-[11px] font-semibold px-2 py-1 rounded-full
+                                         bg-green-500/15 border border-green-500/30 text-green-300
+                                         hover:bg-green-500/25 transition disabled:opacity-40 active:scale-95">
+                              {msg}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   </div>

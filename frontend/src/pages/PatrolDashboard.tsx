@@ -41,7 +41,7 @@ const TYPE_COLOR: Record<string, string> = {
 // Simulated queued (incoming) complaints per vehicle — shown when no real dispatch is active
 const DEMO_QUEUE: Record<number, { id: number; alert_type: string; citizen_name: string; description: string; lat: number; lng: number; eta_minutes: number; created_at: string; citizen_phone: string }[]> = {
   1: [
-    { id: -101, alert_type: "harassment",  citizen_name: "Ananya Krishnan",  description: "Man following me near bus stand. I'm scared.",    lat: 12.9312, lng: 80.1489, eta_minutes: 4, created_at: new Date(Date.now()-8*60000).toISOString(), citizen_phone: "9841000011" },
+    { id: -101, alert_type: "harassment",  citizen_name: "Anita Krishnan",   description: "Man following me near bus stand. I'm scared.",    lat: 12.9312, lng: 80.1489, eta_minutes: 4, created_at: new Date(Date.now()-8*60000).toISOString(), citizen_phone: "9841000011" },
     { id: -102, alert_type: "suspicious",  citizen_name: "Meena Selvam",     description: "Unknown person loitering outside my house.",       lat: 12.9358, lng: 80.1531, eta_minutes: 7, created_at: new Date(Date.now()-3*60000).toISOString(), citizen_phone: "9841000012" },
   ],
   2: [
@@ -62,7 +62,7 @@ const PAST_COMPLAINTS: Record<number, {
   time: string; outcome: "DSR" | "CSR"; notes: string;
 }[]> = {
   1: [
-    { id: "A-201", type: "harassment",  citizen: "Ananya Krishnan",  area: "Vandalur Junction",  time: "08:45 am", outcome: "DSR", notes: "No incident confirmed. Verbal altercation resolved." },
+    { id: "A-201", type: "harassment",  citizen: "Anita Krishnan",   area: "Vandalur Junction",  time: "08:45 am", outcome: "DSR", notes: "No incident confirmed. Verbal altercation resolved." },
     { id: "A-204", type: "sos",         citizen: "Meena Selvam",     area: "Tambaram Market",    time: "10:20 am", outcome: "CSR", notes: "Victim found. FIR registered u/s 354A IPC." },
     { id: "A-211", type: "suspicious",  citizen: "Deepa Venkatesh",  area: "GST Road, Vandalur", time: "01:15 pm", outcome: "DSR", notes: "Unknown person left on officer approach. Area secured." },
   ],
@@ -164,7 +164,7 @@ export default function PatrolDashboard() {
     if (!myAlert?.id || !user?.token) { setMessages([]); return; }
     const poll = () => api.getAlertMessages(user.token, myAlert.id).then(d => setMessages(d.messages ?? [])).catch(() => {});
     poll();
-    const id = setInterval(poll, 5000);
+    const id = setInterval(poll, 2000);
     return () => clearInterval(id);
   }, [myAlert?.id, user?.token]);
 

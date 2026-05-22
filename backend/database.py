@@ -151,7 +151,7 @@ def _seed_default_users(conn: sqlite3.Connection):
         # Commissioner
         ("commissioner1", hash_password("comm1pass"), "commissioner", "Commissioner Sanjay Kumar IPS", "9841000003", None),
         # Citizens
-        ("citizen1", hash_password("citizen1pass"), "citizen", "Ananya Krishnan", "9841000011", None),
+        ("citizen1", hash_password("citizen1pass"), "citizen", "Anita Krishnan", "9841000011", None),
         ("citizen2", hash_password("citizen2pass"), "citizen", "Meena Selvam", "9841000012", None),
         ("citizen3", hash_password("citizen3pass"), "citizen", "Deepa Venkatesh", "9841000013", None),
         # Patrol officers — each mapped to a SSF vehicle
@@ -338,6 +338,10 @@ def _ensure_commissioner_user(conn: sqlite3.Connection):
             except sqlite3.IntegrityError:
                 print(f"WARNING: Could not create {uname} — old schema. Delete alerts.db and restart.")
 
+    # Always keep citizen1 name current (handles existing DBs)
+    cursor.execute("UPDATE users SET full_name = 'Anita Krishnan' WHERE username = 'citizen1'")
+    conn.commit()
+
 
 # ============ User Functions ============
 
@@ -383,6 +387,7 @@ def get_alert_by_id(alert_id: int) -> Optional[dict]:
     cursor = conn.cursor()
     cursor.execute("""
         SELECT alerts.id, alerts.citizen_id, u.full_name AS citizen_name,
+               u.phone AS citizen_phone,
                alerts.alert_type, alerts.description, alerts.lat, alerts.lng, alerts.status,
                alerts.dispatched_vehicle_id, alerts.acknowledged_by, alerts.resolved_by,
                alerts.eta_minutes, alerts.report_type, alerts.report_notes,
@@ -400,6 +405,7 @@ def get_alerts_for_citizen(citizen_id: int) -> list[dict]:
     cursor = conn.cursor()
     cursor.execute("""
         SELECT alerts.id, alerts.citizen_id, u.full_name AS citizen_name,
+               u.phone AS citizen_phone,
                alerts.alert_type, alerts.description, alerts.lat, alerts.lng, alerts.status,
                alerts.dispatched_vehicle_id, alerts.acknowledged_by, alerts.resolved_by,
                alerts.eta_minutes, alerts.report_type, alerts.report_notes,
