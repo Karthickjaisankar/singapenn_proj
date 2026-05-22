@@ -1297,7 +1297,11 @@ if os.path.isdir(_frontend_dist):
 
     @app.get("/{full_path:path}", include_in_schema=False)
     def serve_spa(full_path: str):
-        return FileResponse(os.path.join(_frontend_dist, "index.html"))
+        resp = FileResponse(os.path.join(_frontend_dist, "index.html"))
+        resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["Expires"] = "0"
+        return resp
 
 
 if __name__ == "__main__":
