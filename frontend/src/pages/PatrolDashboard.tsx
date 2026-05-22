@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from "react";
-import { LogOut, MapPin, Phone, MessageCircle, CheckCircle, Send, Wifi, WifiOff, Clock, FileText } from "lucide-react";
+import { LogOut, MapPin, Phone, MessageCircle, CheckCircle, Send, Wifi, WifiOff, Clock, FileText, Map as MapIcon, List } from "lucide-react";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 import { useAuth } from "../contexts/AuthContext";
 import { usePatrolAlerts } from "../hooks/usePatrolAlerts";
 import { api } from "../api";
@@ -57,6 +59,12 @@ export default function PatrolDashboard() {
   const [filingReport, setFilingReport] = useState(false);
   const [dispatchedAt] = useState<Date>(new Date());
   const [elapsed, setElapsed] = useState(0);
+  const [activeTab, setActiveTab] = useState<"details" | "map">("details");
+  const [myPos, setMyPos] = useState<{ lat: number; lng: number } | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const leafletMapRef = useRef<L.Map | null>(null);
+  const citizenMarkerRef = useRef<L.Marker | null>(null);
+  const myMarkerRef = useRef<L.Marker | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Sync messages from alert
@@ -69,6 +77,87 @@ export default function PatrolDashboard() {
     const id = setInterval(() => setElapsed(Math.floor((Date.now() - dispatchedAt.getTime()) / 1000)), 1000);
     return () => clearInterval(id);
   }, [dispatchedAt]);
+
+  // GPS tracking for map
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    const watchId = navigator.geolocation.watchPosition(
+      (p) => setMyPos({ lat: p.coords.latitude, lng: p.coords.longitude }),
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 5000 },
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, []);
+
+  // Leaflet map lifecycle
+  useEffect(() => {
+    if (activeTab !== "map" || !mapContainerRef.current || !myAlert) return;
+
+    // Init map on first render of map tab
+    if (!leafletMapRef.current) {
+      const map = L.map(mapContainerRef.current, {
+        center: [myAlert.lat, myAlert.lng],
+        zoom: 15,
+        zoomControl: true,
+      });
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "© OpenStreetMap",
+      }).addTo(map);
+
+      // Citizen pin (red pulsing)
+      const citizenIcon = L.divIcon({
+        html: `<div style="position:relative;width:36px;height:36px;">
+          <div style="position:absolute;inset:0;border-radius:50%;background:rgba(239,68,68,0.25);animation:ping 1.5s cubic-bezier(0,0,0.2,1) infinite;"></div>
+          <div style="position:absolute;inset:4px;border-radius:50%;background:#ef4444;border:2px solid white;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,0.4);">🆘</div>
+        </div>`,
+        iconSize: [36, 36],
+        iconAnchor: [18, 18],
+        className: "",
+      });
+      citizenMarkerRef.current = L.marker([myAlert.lat, myAlert.lng], { icon: citizenIcon })
+        .addTo(map)
+        .bindPopup(`<b>Citizen Location</b><br/>${myAlert.lat.toFixed(4)}, ${myAlert.lng.toFixed(4)}`);
+
+      leafletMapRef.current = map;
+    }
+
+    return () => {};
+  }, [activeTab, myAlert]);
+
+  // Update my position marker on map
+  useEffect(() => {
+    if (!leafletMapRef.current || !myPos) return;
+    const myIcon = L.divIcon({
+      html: `<div style="width:28px;height:28px;border-radius:50%;background:#3b82f6;border:3px solid white;display:flex;align-items:center;justify-content:center;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,0.5);">🚔</div>`,
+      iconSize: [28, 28],
+      iconAnchor: [14, 14],
+      className: "",
+    });
+    if (myMarkerRef.current) {
+      myMarkerRef.current.setLatLng([myPos.lat, myPos.lng]);
+    } else {
+      myMarkerRef.current = L.marker([myPos.lat, myPos.lng], { icon: myIcon })
+        .addTo(leafletMapRef.current)
+        .bindPopup("My Position");
+    }
+    // Fit bounds to show both pins
+    if (myAlert && citizenMarkerRef.current) {
+      leafletMapRef.current.fitBounds(
+        [[myPos.lat, myPos.lng], [myAlert.lat, myAlert.lng]],
+        { padding: [50, 50] },
+      );
+    }
+  }, [myPos, myAlert]);
+
+  // Cleanup map when tab switches away or component unmounts
+  useEffect(() => {
+    if (activeTab !== "map" && leafletMapRef.current) {
+      leafletMapRef.current.remove();
+      leafletMapRef.current = null;
+      citizenMarkerRef.current = null;
+      myMarkerRef.current = null;
+    }
+  }, [activeTab]);
 
   // Scroll to latest message
   useEffect(() => {
@@ -130,10 +219,12 @@ export default function PatrolDashboard() {
   // "incoming" = dispatched but patrol hasn't accepted (acknowledged) yet
   const isIncoming = myAlert && myAlert.status === "dispatched";
 
+  const hasActiveAlert = myAlert && (isAccepted || isOnScene);
+
   return (
-    <div className="min-h-screen bg-[#0f1117] flex flex-col items-center py-0">
+    <div className="h-screen bg-[#0f1117] flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="w-full bg-[#1a1d27] border-b border-[#2e3347] px-4 py-2.5 flex items-center gap-3">
+      <div className="w-full bg-[#1a1d27] border-b border-[#2e3347] px-4 py-2.5 flex items-center gap-3 shrink-0">
         <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center text-sm font-black text-white shrink-0">
           {vehicleId}
         </div>
@@ -142,6 +233,29 @@ export default function PatrolDashboard() {
           <p className="text-[10px] text-slate-500 mt-0.5">{user?.full_name}</p>
         </div>
         <div className="flex-1" />
+
+        {/* Tab switcher — only when alert is active */}
+        {hasActiveAlert && (
+          <div className="flex items-center bg-[#22263a] rounded-lg p-0.5 gap-0.5">
+            <button
+              onClick={() => setActiveTab("details")}
+              className={`flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-md transition ${
+                activeTab === "details" ? "bg-[#1a1d27] text-white" : "text-slate-500 hover:text-slate-300"
+              }`}
+            >
+              <List className="w-3 h-3" /> Details
+            </button>
+            <button
+              onClick={() => setActiveTab("map")}
+              className={`flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-md transition ${
+                activeTab === "map" ? "bg-[#1a1d27] text-white" : "text-slate-500 hover:text-slate-300"
+              }`}
+            >
+              <MapIcon className="w-3 h-3" /> Map
+            </button>
+          </div>
+        )}
+
         <div className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg ${
           connected ? "text-green-400 bg-green-500/10" : "text-amber-400 bg-amber-500/10"
         }`}>
@@ -156,8 +270,45 @@ export default function PatrolDashboard() {
         </button>
       </div>
 
-      {/* Main content — constrained to phone-like width */}
-      <div className="w-full max-w-[440px] px-4 py-4 space-y-4">
+      {/* ── Map Tab ── */}
+      {hasActiveAlert && activeTab === "map" && myAlert && (
+        <div className="flex-1 relative" style={{ minHeight: 0 }}>
+          <div ref={mapContainerRef} className="absolute inset-0" />
+          {/* Navigate overlay button */}
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[1000] flex gap-2">
+            <a
+              href={myPos
+                ? `https://maps.google.com/maps?saddr=${myPos.lat},${myPos.lng}&daddr=${myAlert.lat},${myAlert.lng}&dirflg=d`
+                : `https://maps.google.com/?q=${myAlert.lat},${myAlert.lng}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm px-4 py-2.5 rounded-2xl shadow-2xl transition"
+            >
+              <MapPin className="w-4 h-4" /> Navigate to Citizen
+            </a>
+            {myPos && (
+              <button
+                onClick={() => leafletMapRef.current?.setView([myAlert.lat, myAlert.lng], 16)}
+                className="bg-[#1a1d27]/90 border border-[#2e3347] text-slate-300 text-xs font-semibold px-3 py-2.5 rounded-2xl shadow-2xl hover:text-white transition"
+              >
+                Re-center
+              </button>
+            )}
+          </div>
+          {/* Location badge */}
+          {!myPos && (
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] bg-amber-500/90 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow">
+              Enable GPS for turn-by-turn
+            </div>
+          )}
+          {/* Inject ping animation */}
+          <style>{`@keyframes ping{75%,100%{transform:scale(2);opacity:0}}`}</style>
+        </div>
+      )}
+
+      {/* ── Details Tab (scrollable) ── */}
+      <div className={`${hasActiveAlert && activeTab === "map" ? "hidden" : "flex-1 overflow-y-auto"}`}>
+      <div className="w-full max-w-[440px] mx-auto px-4 py-4 space-y-4">
 
         {/* ─── Standby state ─── */}
         {!myAlert && (
@@ -425,6 +576,7 @@ export default function PatrolDashboard() {
             </div>
           </>
         )}
+      </div>
       </div>
     </div>
   );
