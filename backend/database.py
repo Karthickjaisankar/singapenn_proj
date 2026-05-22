@@ -180,18 +180,18 @@ def _seed_demo_alerts(conn: sqlite3.Connection):
     # citizen IDs are 4, 5, 6 (inserted after 2 officers + 1 commissioner)
     alerts = [
         # (citizen_id, alert_type, description, lat, lng, status, dispatched_vehicle_id, eta_minutes)
-        (4, "sos",         "Help needed urgently",          12.9249, 80.1000, "pending",      None, None),
-        (5, "harassment",  "Being followed near bus stand", 12.9657, 80.1588, "pending",      None, None),
-        (6, "suspicious",  "Unknown men loitering",         12.9062, 80.1490, "pending",      None, None),
-        (4, "medical",     "Accident victim on road",       12.9314, 80.1496, "acknowledged", None, None),
-        (5, "sos",         "Need immediate assistance",     12.9344, 80.2120, "acknowledged", None, None),
-        (6, "harassment",  "Verbal abuse at market",        12.9480, 80.2360, "acknowledged", None, None),
-        (4, "suspicious",  "Abandoned bag near school",     12.9132, 80.1903, "dispatched",   1,    6),
-        (5, "sos",         "Child missing from park",       12.9217, 80.1950, "dispatched",   2,    8),
-        (6, "medical",     "Woman collapsed on street",     12.8900, 80.1300, "dispatched",   1,    5),
-        (4, "harassment",  "Eve-teasing near college",      12.9400, 80.1750, "resolved",     None, None),
-        (5, "other",       "Loud altercation at night",     12.9550, 80.2000, "resolved",     None, None),
-        (6, "other",       "Stray dog attack",              12.9100, 80.1700, "pending",      None, None),
+        (4, "sos",         "Man trying to force me into a vehicle",         12.9249, 80.1000, "pending",      None, None),
+        (5, "harassment",  "Being followed near Vandalur bus stand",        12.9657, 80.1588, "pending",      None, None),
+        (6, "suspicious",  "Group of men watching schoolgirls outside gate",12.9062, 80.1490, "pending",      None, None),
+        (4, "harassment",  "Stalked by unknown man on my walk home",        12.9314, 80.1496, "acknowledged", None, None),
+        (5, "sos",         "Being followed — I am scared, please help",     12.9344, 80.2120, "acknowledged", None, None),
+        (6, "harassment",  "Eve-teasing and verbal harassment at market",   12.9480, 80.2360, "acknowledged", None, None),
+        (4, "harassment",  "Group of men blocking woman's path near ATM",   12.9132, 80.1903, "dispatched",   1,    6),
+        (5, "sos",         "Young girl separated from family at bus stop",  12.9217, 80.1950, "dispatched",   2,    8),
+        (6, "harassment",  "Woman attacked near Tambaram junction",         12.8900, 80.1300, "dispatched",   1,    5),
+        (4, "harassment",  "Eve-teasing near women's college campus",       12.9400, 80.1750, "resolved",     None, None),
+        (5, "harassment",  "Domestic violence — woman calling for help",    12.9550, 80.2000, "resolved",     None, None),
+        (6, "harassment",  "Man stalking woman near Tambaram railway station",12.9100,80.1700, "pending",     None, None),
     ]
 
     cursor.executemany(

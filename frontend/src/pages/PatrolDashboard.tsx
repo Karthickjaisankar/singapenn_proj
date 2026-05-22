@@ -41,18 +41,18 @@ const TYPE_COLOR: Record<string, string> = {
 // Simulated queued (incoming) complaints per vehicle — shown when no real dispatch is active
 const DEMO_QUEUE: Record<number, { id: number; alert_type: string; citizen_name: string; description: string; lat: number; lng: number; eta_minutes: number; created_at: string; citizen_phone: string }[]> = {
   1: [
-    { id: -101, alert_type: "harassment",  citizen_name: "Anita Krishnan",   description: "Man following me near bus stand. I'm scared.",    lat: 12.9312, lng: 80.1489, eta_minutes: 4, created_at: new Date(Date.now()-8*60000).toISOString(), citizen_phone: "9841000011" },
-    { id: -102, alert_type: "suspicious",  citizen_name: "Meena Selvam",     description: "Unknown person loitering outside my house.",       lat: 12.9358, lng: 80.1531, eta_minutes: 7, created_at: new Date(Date.now()-3*60000).toISOString(), citizen_phone: "9841000012" },
+    { id: -101, alert_type: "harassment",  citizen_name: "Anita Krishnan",   description: "Man following me near bus stand. I'm scared.",       lat: 12.9312, lng: 80.1489, eta_minutes: 4, created_at: new Date(Date.now()-8*60000).toISOString(), citizen_phone: "9841000011" },
+    { id: -102, alert_type: "harassment",  citizen_name: "Meena Selvam",     description: "Group of men harassing me outside college gate.",     lat: 12.9358, lng: 80.1531, eta_minutes: 7, created_at: new Date(Date.now()-3*60000).toISOString(), citizen_phone: "9841000012" },
   ],
   2: [
-    { id: -103, alert_type: "sos",         citizen_name: "Deepa Venkatesh",  description: "Emergency — I need help immediately.",             lat: 12.9671, lng: 80.1602, eta_minutes: 5, created_at: new Date(Date.now()-5*60000).toISOString(), citizen_phone: "9841000013" },
+    { id: -103, alert_type: "sos",         citizen_name: "Deepa Venkatesh",  description: "Someone trying to force me into a vehicle — help!",  lat: 12.9671, lng: 80.1602, eta_minutes: 5, created_at: new Date(Date.now()-5*60000).toISOString(), citizen_phone: "9841000013" },
   ],
   3: [
-    { id: -104, alert_type: "harassment",  citizen_name: "Priya Rajan",      description: "Neighbour threatening me. Please come.",           lat: 12.9299, lng: 80.1477, eta_minutes: 6, created_at: new Date(Date.now()-11*60000).toISOString(), citizen_phone: "9841000014" },
-    { id: -105, alert_type: "medical",     citizen_name: "Kavitha Nair",     description: "I am injured and need help.",                      lat: 12.9321, lng: 80.1408, eta_minutes: 9, created_at: new Date(Date.now()-2*60000).toISOString(), citizen_phone: "9841000015" },
+    { id: -104, alert_type: "harassment",  citizen_name: "Priya Rajan",      description: "Husband threatening me. Please come immediately.",   lat: 12.9299, lng: 80.1477, eta_minutes: 6, created_at: new Date(Date.now()-11*60000).toISOString(), citizen_phone: "9841000014" },
+    { id: -105, alert_type: "sos",         citizen_name: "Kavitha Nair",     description: "I was attacked and injured. Need help urgently.",    lat: 12.9321, lng: 80.1408, eta_minutes: 9, created_at: new Date(Date.now()-2*60000).toISOString(), citizen_phone: "9841000015" },
   ],
   4: [
-    { id: -106, alert_type: "sos",         citizen_name: "Selvi Pandian",    description: "SOS — someone tried to grab me.",                  lat: 12.9347, lng: 80.2134, eta_minutes: 3, created_at: new Date(Date.now()-6*60000).toISOString(), citizen_phone: "9841000016" },
+    { id: -106, alert_type: "sos",         citizen_name: "Selvi Pandian",    description: "SOS — someone tried to grab me near the market.",    lat: 12.9347, lng: 80.2134, eta_minutes: 3, created_at: new Date(Date.now()-6*60000).toISOString(), citizen_phone: "9841000016" },
   ],
 };
 
@@ -62,24 +62,24 @@ const PAST_COMPLAINTS: Record<number, {
   time: string; outcome: "DSR" | "CSR"; notes: string;
 }[]> = {
   1: [
-    { id: "A-201", type: "harassment",  citizen: "Anita Krishnan",   area: "Vandalur Junction",  time: "08:45 am", outcome: "DSR", notes: "No incident confirmed. Verbal altercation resolved." },
-    { id: "A-204", type: "sos",         citizen: "Meena Selvam",     area: "Tambaram Market",    time: "10:20 am", outcome: "CSR", notes: "Victim found. FIR registered u/s 354A IPC." },
-    { id: "A-211", type: "suspicious",  citizen: "Deepa Venkatesh",  area: "GST Road, Vandalur", time: "01:15 pm", outcome: "DSR", notes: "Unknown person left on officer approach. Area secured." },
+    { id: "A-201", type: "harassment",  citizen: "Anita Krishnan",   area: "Vandalur Junction",    time: "08:45 am", outcome: "DSR", notes: "Man warned and dispersed. Victim safe. No FIR filed at victim's request." },
+    { id: "A-204", type: "sos",         citizen: "Meena Selvam",     area: "Tambaram Market",      time: "10:20 am", outcome: "CSR", notes: "Victim found near bus stop. FIR registered u/s 354A IPC. Perpetrator identified." },
+    { id: "A-211", type: "harassment",  citizen: "Deepa Venkatesh",  area: "GST Road, Vandalur",   time: "01:15 pm", outcome: "DSR", notes: "Eve-teasing group dispersed on patrol arrival. Victim counselled and escorted home." },
   ],
   2: [
-    { id: "A-202", type: "sos",         citizen: "Priya Rajan",      area: "Meenambakkam Metro", time: "09:10 am", outcome: "CSR", notes: "Victim escorted to Pallavaram AWPS. FIR to be filed." },
-    { id: "A-207", type: "harassment",  citizen: "Kavitha Nair",     area: "Pallavaram Market",  time: "11:40 am", outcome: "DSR", notes: "Shopkeeper warned. No crime found." },
-    { id: "A-215", type: "medical",     citizen: "Selvi Pandian",    area: "Tirusulam Junction", time: "02:55 pm", outcome: "DSR", notes: "Medical team arrived. Patrol assisted handover." },
+    { id: "A-202", type: "sos",         citizen: "Priya Rajan",      area: "Meenambakkam Metro",   time: "09:10 am", outcome: "CSR", notes: "Domestic violence victim escorted to Pallavaram AWPS. FIR u/s 498A IPC registered." },
+    { id: "A-207", type: "harassment",  citizen: "Kavitha Nair",     area: "Pallavaram Market",    time: "11:40 am", outcome: "DSR", notes: "Suspect identified and warned. Victim safe. Incident documented as DSR." },
+    { id: "A-215", type: "harassment",  citizen: "Selvi Pandian",    area: "Tirusulam Junction",   time: "02:55 pm", outcome: "DSR", notes: "Woman followed by unknown man. Suspect fled on patrol approach. Area monitored." },
   ],
   3: [
-    { id: "A-203", type: "harassment",  citizen: "Divya Mohan",      area: "Perungalathur Rd",   time: "09:30 am", outcome: "CSR", notes: "Perpetrator identified. Case referred to CI." },
-    { id: "A-209", type: "sos",         citizen: "Sumathi Arjun",    area: "Chromepet Tank Road",time: "12:15 pm", outcome: "CSR", notes: "Victim safe. Arrested suspect u/s 509 IPC." },
+    { id: "A-203", type: "harassment",  citizen: "Divya Mohan",      area: "Perungalathur Rd",     time: "09:30 am", outcome: "CSR", notes: "Perpetrator detained. Case referred to CI u/s 354D IPC (stalking)." },
+    { id: "A-209", type: "sos",         citizen: "Sumathi Arjun",    area: "Chromepet Tank Road",  time: "12:15 pm", outcome: "CSR", notes: "Victim rescued from forced confinement. Suspect arrested u/s 509 IPC." },
   ],
   4: [
-    { id: "A-205", type: "suspicious",  citizen: "Radha Suresh",     area: "Semmenchery Nagar",  time: "08:55 am", outcome: "DSR", notes: "Routine check. No threat found." },
-    { id: "A-208", type: "harassment",  citizen: "Nithya Prakash",   area: "Semmenchery East",   time: "11:00 am", outcome: "CSR", notes: "FIR lodged. Victim given protection number." },
-    { id: "A-213", type: "sos",         citizen: "Lalitha Ganesh",   area: "Okkiyam Thoraipakkam", time: "01:50 pm", outcome: "CSR", notes: "Victim rescued. Perpetrator detained." },
-    { id: "A-217", type: "suspicious",  citizen: "Bhavani Raj",      area: "Perungudi Main Road",time: "03:30 pm", outcome: "DSR", notes: "Unrelated activity. Area patrolled." },
+    { id: "A-205", type: "harassment",  citizen: "Radha Suresh",     area: "Semmenchery Nagar",    time: "08:55 am", outcome: "DSR", notes: "Group of youths harassing women in street. Dispersed and warned. Area patrolled." },
+    { id: "A-208", type: "harassment",  citizen: "Nithya Prakash",   area: "Semmenchery East",     time: "11:00 am", outcome: "CSR", notes: "FIR lodged u/s 354 IPC. Victim given protection helpline number." },
+    { id: "A-213", type: "sos",         citizen: "Lalitha Ganesh",   area: "Okkiyam Thoraipakkam", time: "01:50 pm", outcome: "CSR", notes: "Child found safe near school. Reunited with family. Perpetrator detained." },
+    { id: "A-217", type: "harassment",  citizen: "Bhavani Raj",      area: "Perungudi Main Road",  time: "03:30 pm", outcome: "DSR", notes: "Suspicious man near school gate warned and moved on. School security alerted." },
   ],
 };
 
