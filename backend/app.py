@@ -1297,6 +1297,11 @@ if os.path.isdir(_frontend_dist):
 
     @app.get("/{full_path:path}", include_in_schema=False)
     def serve_spa(full_path: str):
+        # Serve real files from dist root (PNG, favicon, etc.) directly
+        candidate = os.path.join(_frontend_dist, full_path)
+        if full_path and os.path.isfile(candidate):
+            return FileResponse(candidate)
+        # Everything else → SPA shell (never cache so deploys take effect immediately)
         resp = FileResponse(os.path.join(_frontend_dist, "index.html"))
         resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         resp.headers["Pragma"] = "no-cache"
