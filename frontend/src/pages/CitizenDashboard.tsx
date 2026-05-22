@@ -51,7 +51,7 @@ function relTime(iso: string) {
 const OFFICER_NAMES: Record<number, string> = { 1: "SI Priya", 2: "SI Murugan", 3: "SI Kavitha", 4: "SI Rajan" };
 
 type Tab = "home" | "report" | "alerts";
-type SOSFlowState = "idle" | "sheet" | "sending" | "sent" | "acknowledged" | "dispatched" | "resolved";
+type SOSFlowState = "idle" | "sheet" | "sending" | "sent" | "acknowledged" | "dispatched" | "on_scene" | "resolved";
 
 export default function CitizenDashboard() {
   const { user, logout } = useAuth();
@@ -154,8 +154,8 @@ export default function CitizenDashboard() {
           }
           setSosFlow("acknowledged");
         } else if (latest.status === "on_scene" && ["sent", "dispatched", "acknowledged"].includes(sosFlow)) {
-          setSosFlow("acknowledged"); // keep ETA card visible, patrol has arrived
-        } else if (latest.status === "resolved" && ["sent", "dispatched", "acknowledged"].includes(sosFlow)) {
+          setSosFlow("on_scene");
+        } else if (latest.status === "resolved" && ["sent", "dispatched", "acknowledged", "on_scene"].includes(sosFlow)) {
           setSosFlow("resolved");
         }
       } catch { /* ignore */ }
@@ -364,9 +364,9 @@ export default function CitizenDashboard() {
                               <div className={`text-sm px-3 py-1.5 rounded-2xl max-w-[85%] ${
                                 mine
                                   ? "bg-green-600 text-white rounded-tr-sm"
-                                  : "bg-blue-600/20 border border-blue-500/30 text-blue-200 rounded-tl-sm"
+                                  : "bg-blue-600 text-white rounded-tl-sm"
                               }`}>
-                                {!mine && <p className="text-[9px] text-blue-400 font-bold mb-0.5">OFFICER</p>}
+                                {!mine && <p className="text-[9px] text-blue-100 font-bold mb-0.5">OFFICER</p>}
                                 <p className="leading-snug">{m.body}</p>
                               </div>
                             </div>
@@ -383,6 +383,81 @@ export default function CitizenDashboard() {
                               className="text-[11px] font-semibold px-2 py-1 rounded-full
                                          bg-green-500/15 border border-green-500/30 text-green-300
                                          hover:bg-green-500/25 transition disabled:opacity-40 active:scale-95">
+                              {msg}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="border-t border-border px-5 py-3">
+                    <button onClick={handleCancelAlert}
+                      className="w-full text-sm text-text-muted hover:text-text-secondary py-1 transition-colors">
+                      I'm safe now — cancel alert
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ON SCENE — patrol has physically arrived */}
+            {sosFlow === "on_scene" && (
+              <div className="absolute inset-0 z-20 flex items-end justify-center pb-24 px-5 pointer-events-none">
+                <div className="w-full max-w-sm bg-surface-L1 rounded-3xl shadow-2xl overflow-hidden pointer-events-auto"
+                  style={{ boxShadow: "0 8px 40px rgba(245,158,11,0.30)" }}>
+                  {/* Amber header */}
+                  <div className="bg-amber-500 px-5 py-4">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-xl">🚔</span>
+                      <span className="text-white font-black text-base">Police has arrived!</span>
+                    </div>
+                    <p className="text-amber-100 text-xs">The patrol vehicle is at your location. You are safe.</p>
+                  </div>
+                  {/* Body */}
+                  <div className="px-5 py-4">
+                    <div className="bg-amber-50 rounded-2xl px-4 py-3 flex items-center gap-3 mb-4">
+                      <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
+                        <span className="text-xl">✅</span>
+                      </div>
+                      <div>
+                        <p className="text-amber-900 text-sm font-bold">Officer on scene</p>
+                        <p className="text-amber-700 text-xs">Please approach the patrol vehicle and identify yourself</p>
+                      </div>
+                    </div>
+                    {/* ── 2-way chat ── */}
+                    <div className="border border-border rounded-2xl overflow-hidden">
+                      <div className="px-3 py-2 bg-surface-L2 border-b border-border flex items-center gap-1.5">
+                        <span className="text-base">💬</span>
+                        <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Chat with Officer</p>
+                      </div>
+                      <div className="px-3 py-2 space-y-2 max-h-36 overflow-y-auto bg-surface-L1">
+                        {alertMessages.length === 0 && (
+                          <p className="text-text-muted text-xs text-center py-3">No messages yet</p>
+                        )}
+                        {alertMessages.map(m => {
+                          const mine = (m as any).sender_role === "citizen";
+                          return (
+                            <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                              <div className={`text-sm px-3 py-1.5 rounded-2xl max-w-[85%] ${
+                                mine
+                                  ? "bg-green-600 text-white rounded-tr-sm"
+                                  : "bg-blue-600 text-white rounded-tl-sm"
+                              }`}>
+                                {!mine && <p className="text-[9px] text-blue-100 font-bold mb-0.5">OFFICER</p>}
+                                <p className="leading-snug">{m.body}</p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="px-3 py-2 border-t border-border bg-surface-L2">
+                        <p className="text-[10px] text-text-muted mb-1.5 font-semibold">Tap to send:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {["I'm here","I can see the vehicle","I need medical help","Please wait for me"].map(msg => (
+                            <button key={msg} onClick={() => sendCitizenPreset(msg)} disabled={sendingPreset}
+                              className="text-[11px] font-semibold px-2 py-1 rounded-full
+                                         bg-amber-500/15 border border-amber-500/30 text-amber-700
+                                         hover:bg-amber-500/25 transition disabled:opacity-40 active:scale-95">
                               {msg}
                             </button>
                           ))}
