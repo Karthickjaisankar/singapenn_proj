@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTheme } from "../contexts/ThemeContext";
 import { Sun, Moon, RotateCcw } from "lucide-react";
 
@@ -54,6 +54,18 @@ export default function DemoPage() {
       }
     });
   }, []);
+
+  // When a persona becomes visible, the Leaflet map inside was initialized with 0×0
+  // dimensions (display:none container). Firing resize on the iframe window makes
+  // Leaflet call invalidateSize() and repaint at the correct dimensions.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      visible.forEach(p => {
+        try { iframeRefs.current[p]?.contentWindow?.dispatchEvent(new Event("resize")); } catch {}
+      });
+    }, 80);
+    return () => clearTimeout(t);
+  }, [visible]);
 
   const handleReset = useCallback(async () => {
     setResetState("loading");

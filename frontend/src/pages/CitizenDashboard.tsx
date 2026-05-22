@@ -133,19 +133,29 @@ export default function CitizenDashboard() {
         if (!latest || latest.status === "cancelled") {
           setSosFlow("idle");
           setDispatchInfo(null);
-        } else if (latest.status === "acknowledged" && sosFlow === "sent") {
-          setSosFlow("acknowledged");
-        } else if (latest.status === "dispatched" && ["sent", "acknowledged"].includes(sosFlow)) {
+        } else if (latest.status === "dispatched" && ["sent"].includes(sosFlow)) {
+          // Officer assigned a vehicle — store info for later, but patrol hasn't accepted yet
           const vid = latest.dispatched_vehicle_id ?? 1;
-          setSosFlow("dispatched");
           setDispatchInfo({
             officerName: OFFICER_NAMES[vid] ?? `Officer ${vid}`,
             vehicleId: vid,
             etaMinutes: latest.eta_minutes ?? 5,
           });
-        } else if (latest.status === "on_scene" && ["sent", "acknowledged", "dispatched"].includes(sosFlow)) {
-          setSosFlow("dispatched"); // keep dispatched card visible, patrol has arrived
-        } else if (latest.status === "resolved" && ["sent", "acknowledged", "dispatched"].includes(sosFlow)) {
+          setSosFlow("dispatched");
+        } else if (latest.status === "acknowledged" && ["sent", "dispatched"].includes(sosFlow)) {
+          // Patrol accepted — now show ETA; grab dispatchInfo from alert if not already set
+          if (!dispatchInfo) {
+            const vid = latest.dispatched_vehicle_id ?? 1;
+            setDispatchInfo({
+              officerName: OFFICER_NAMES[vid] ?? `Officer ${vid}`,
+              vehicleId: vid,
+              etaMinutes: latest.eta_minutes ?? 5,
+            });
+          }
+          setSosFlow("acknowledged");
+        } else if (latest.status === "on_scene" && ["sent", "dispatched", "acknowledged"].includes(sosFlow)) {
+          setSosFlow("acknowledged"); // keep ETA card visible, patrol has arrived
+        } else if (latest.status === "resolved" && ["sent", "dispatched", "acknowledged"].includes(sosFlow)) {
           setSosFlow("resolved");
         }
       } catch { /* ignore */ }
@@ -301,21 +311,21 @@ export default function CitizenDashboard() {
               </div>
             )}
 
-            {/* ACKNOWLEDGED — top banner */}
-            {sosFlow === "acknowledged" && (
+            {/* DISPATCHED — vehicle assigned but patrol hasn't accepted yet */}
+            {sosFlow === "dispatched" && (
               <div className="absolute top-0 left-0 right-0 z-20 mx-4 mt-3">
                 <div className="bg-blue-600 text-white rounded-2xl px-4 py-3 flex items-center gap-2.5 shadow-lg">
                   <div className="w-2.5 h-2.5 rounded-full bg-white animate-pulse shrink-0" />
                   <div>
-                    <p className="text-sm font-bold leading-tight">Police are reviewing your alert</p>
-                    <p className="text-xs text-blue-200 mt-0.5">A Patrol Vehicle is being assigned to your location…</p>
+                    <p className="text-sm font-bold leading-tight">Patrol vehicle assigned</p>
+                    <p className="text-xs text-blue-200 mt-0.5">Waiting for officer to confirm… you will see ETA shortly.</p>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* DISPATCHED — center card */}
-            {sosFlow === "dispatched" && dispatchInfo && (
+            {/* ACKNOWLEDGED — patrol accepted, show full ETA card */}
+            {sosFlow === "acknowledged" && dispatchInfo && (
               <div className="absolute inset-0 z-20 flex items-end justify-center pb-24 px-5 pointer-events-none">
                 <div className="w-full max-w-sm bg-surface-L1 rounded-3xl shadow-2xl overflow-hidden pointer-events-auto"
                   style={{ boxShadow: "0 8px 40px rgba(22,163,74,0.25)" }}>
@@ -403,8 +413,8 @@ export default function CitizenDashboard() {
               </div>
             )}
 
-            {/* SOS button — only visible in idle/sent/acknowledged states */}
-            {(sosFlow === "idle" || sosFlow === "sent" || sosFlow === "acknowledged") && (
+            {/* SOS button — visible until patrol accepts (acknowledged shows ETA card instead) */}
+            {(sosFlow === "idle" || sosFlow === "sent" || sosFlow === "dispatched") && (
               <div className="absolute bottom-6 left-0 right-0 z-10 flex flex-col items-center gap-2">
                 <button
                   onClick={() => setSosFlow("sheet")}

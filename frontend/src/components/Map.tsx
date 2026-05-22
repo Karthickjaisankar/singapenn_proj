@@ -293,7 +293,14 @@ export default function Map({
     L.control.zoom({ position: "topright" }).addTo(m);
 
     mapRef.current = m;
-    return () => {};
+
+    // When this component is inside a hidden iframe (display:none), Leaflet initialises
+    // with 0×0 dimensions. Listening to window.resize catches the moment the parent
+    // makes the iframe visible (DemoPage fires a synthetic resize event at that point).
+    const onResize = () => { mapRef.current?.invalidateSize(); };
+    window.addEventListener("resize", onResize);
+
+    return () => { window.removeEventListener("resize", onResize); };
   }, []);
 
   // ── Effect 2: data layers (stations, crimes, venues, alerts) ─────────────
@@ -556,7 +563,9 @@ export default function Map({
     }
 
     if (!selectedAlertId || !mapRef.current) {
-      // Deselected — fly back to monitoring overview
+      // Deselected — fly back to monitoring overview (skip if map has no size yet)
+      const sz = mapRef.current?.getSize();
+      if (!sz || sz.x === 0 || sz.y === 0) return;
       mapRef.current?.flyTo(MAP_CENTER, MAP_ZOOM, { animate: true, duration: 0.9 });
       return;
     }
