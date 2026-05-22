@@ -205,40 +205,38 @@ export default function PatrolTrailsView({ token }: Props) {
         new Date((/Z|[+-]\d{2}:/.test(b.recorded_at) ? b.recorded_at : b.recorded_at.replace(" ", "T") + "Z")).getTime()
     );
 
-    // Build continuous segments, breaking on teleport jumps
-    let segment: [number, number][] = [];
-    for (let i = 0; i < sorted.length; i++) {
-      if (i === 0) {
-        segment = [[sorted[0].lat, sorted[0].lng]];
-        continue;
-      }
+    // Collect all segments, break on teleport jumps > MAX_JUMP_KM
+    const allSegments: { pts: [number, number][]; endIdx: number }[] = [];
+    let segment: [number, number][] = [[sorted[0].lat, sorted[0].lng]];
+    for (let i = 1; i < sorted.length; i++) {
       const d = haversine(sorted[i - 1].lat, sorted[i - 1].lng, sorted[i].lat, sorted[i].lng);
-      if (d > MAX_JUMP_KM && segment.length > 1) {
-        const poly = L.polyline(segment, { color, weight: 3, opacity: 0.8 }).addTo(mapRef.current!);
-        trailRef.current.push(poly);
-        segment = [];
+      if (d > MAX_JUMP_KM) {
+        if (segment.length > 1) allSegments.push({ pts: [...segment], endIdx: i - 1 });
+        segment = [[sorted[i].lat, sorted[i].lng]];
+      } else {
+        segment.push([sorted[i].lat, sorted[i].lng]);
       }
-      segment.push([sorted[i].lat, sorted[i].lng]);
     }
-    if (segment.length > 1) {
-      const poly = L.polyline(segment, { color, weight: 3, opacity: 0.8 }).addTo(mapRef.current!);
-      trailRef.current.push(poly);
-    }
+    if (segment.length > 1) allSegments.push({ pts: segment, endIdx: sorted.length - 1 });
+
+    // Draw only the longest segment (main patrol route), ignore tiny post-teleport orphans
+    const mainSeg = allSegments.reduce((a, b) => a.pts.length >= b.pts.length ? a : b, { pts: [], endIdx: 0 });
+    allSegments.forEach(s => {
+      const isMain = s === mainSeg;
+      if (s.pts.length > 1) {
+        const poly = L.polyline(s.pts, { color, weight: isMain ? 3 : 2, opacity: isMain ? 0.85 : 0.35 }).addTo(mapRef.current!);
+        trailRef.current.push(poly);
+      }
+    });
+    const lastValidPoint = mainSeg.pts.length > 0 ? sorted[mainSeg.endIdx] : sorted[0];
 
     // Start marker (green dot)
     startMarkerRef.current = L.circleMarker([sorted[0].lat, sorted[0].lng], {
       radius: 7, fillColor: "#22c55e", fillOpacity: 1, color: "#fff", weight: 2,
     }).addTo(mapRef.current).bindTooltip("Start of shift", { direction: "top" });
 
-    // End marker (current position — colored square via divIcon)
-    const last = sorted[sorted.length - 1];
-    const endIcon = L.divIcon({
-      html: `<div style="width:12px;height:12px;background:${color};border:2px solid #fff;border-radius:3px;box-shadow:0 0 6px ${color}99"></div>`,
-      iconSize: [12, 12],
-      iconAnchor: [6, 6],
-      className: "",
-    });
-    endMarkerRef.current = L.circleMarker([last.lat, last.lng], {
+    // End marker — use last point of the connected trail (skip teleport jumps)
+    endMarkerRef.current = L.circleMarker([lastValidPoint.lat, lastValidPoint.lng], {
       radius: 8, fillColor: color, fillOpacity: 1, color: "#fff", weight: 2,
     }).addTo(mapRef.current).bindTooltip(`Current position`, { direction: "top" });
     endMarkerRef.current.bindPopup(`
@@ -247,11 +245,10 @@ export default function PatrolTrailsView({ token }: Props) {
         <div style="color:#94a3b8;line-height:1.8">
           <div>👮 ${OFFICER_INFO[selectedVehicle].name}</div>
           <div>📞 ${OFFICER_INFO[selectedVehicle].phone}</div>
-          <div>⏱ Last seen: ${fmtTime(last.recorded_at)}</div>
+          <div>⏱ Last seen: ${fmtTime(lastValidPoint.recorded_at)}</div>
         </div>
       </div>
     `);
-    void endIcon; // suppress unused warning
 
     // Hotspot circles
     const { hotspots } = computeStats(pts);
@@ -277,10 +274,9 @@ export default function PatrolTrailsView({ token }: Props) {
       hotspotLayersRef.current.push(cm);
     });
 
-    // Fit map to trail
-    const allPts = sorted.map(p => [p.lat, p.lng] as [number, number]);
-    if (allPts.length > 1) {
-      mapRef.current.fitBounds(L.latLngBounds(allPts).pad(0.15));
+    // Fit map to main segment bounds
+    if (mainSeg.pts.length > 1) {
+      mapRef.current.fitBounds(L.latLngBounds(mainSeg.pts).pad(0.2));
     }
   }, [tracks, selectedVehicle]);
 

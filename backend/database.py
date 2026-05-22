@@ -204,35 +204,106 @@ def _seed_demo_alerts(conn: sqlite3.Connection):
 
 
 def _seed_demo_telemetry(conn: sqlite3.Connection):
-    """Seed 8 hours of synthetic patrol circuits for all 4 vehicles (demo use)."""
-    import math
+    """Seed 8 hours of realistic patrol routes for all 4 vehicles (demo use).
+    Each vehicle follows a zigzag street pattern through its zone with 2 stops >30 min.
+    Points at 1-min intervals, shift starts 8h 30min before current time.
+    """
+    import math, random as _rnd
+    _rnd.seed(42)
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*) FROM patrol_telemetry")
     if cursor.fetchone()[0] > 0:
         return
 
-    # Zone centroids for each PPV (Tambaram sub-division AWPS zones)
-    CIRCUITS = {
-        1: (12.9398, 80.1323),
-        2: (12.9657, 80.1588),
-        3: (12.9314, 80.1496),
-        4: (12.9344, 80.2120),
+    def _haversine(la1, lo1, la2, lo2):
+        R = 6371
+        dlat = math.radians(la2 - la1)
+        dlng = math.radians(lo2 - lo1)
+        a = math.sin(dlat/2)**2 + math.cos(math.radians(la1))*math.cos(math.radians(la2))*math.sin(dlng/2)**2
+        return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+
+    # Realistic patrol waypoints following major roads in each zone
+    ROUTES = {
+        1: [(12.9428,80.1310),(12.9460,80.1295),(12.9490,80.1270),(12.9510,80.1320),
+            (12.9480,80.1380),(12.9440,80.1410),(12.9390,80.1400),(12.9350,80.1370),
+            (12.9320,80.1330),(12.9340,80.1270),(12.9370,80.1240),(12.9400,80.1260),
+            (12.9420,80.1290),(12.9428,80.1310),(12.9460,80.1295),(12.9490,80.1270),
+            (12.9500,80.1320),(12.9470,80.1360),(12.9420,80.1390),(12.9380,80.1350),
+            (12.9360,80.1300),(12.9390,80.1270),(12.9410,80.1290),(12.9428,80.1310)],
+        2: [(12.9670,80.1600),(12.9700,80.1570),(12.9730,80.1530),(12.9760,80.1560),
+            (12.9790,80.1610),(12.9820,80.1650),(12.9800,80.1700),(12.9760,80.1720),
+            (12.9720,80.1700),(12.9690,80.1650),(12.9660,80.1620),(12.9640,80.1580),
+            (12.9610,80.1540),(12.9640,80.1510),(12.9670,80.1510),(12.9700,80.1540),
+            (12.9720,80.1570),(12.9750,80.1600),(12.9780,80.1640),(12.9760,80.1680),
+            (12.9720,80.1660),(12.9690,80.1630),(12.9670,80.1600)],
+        3: [(12.9310,80.1500),(12.9340,80.1470),(12.9370,80.1440),(12.9400,80.1460),
+            (12.9420,80.1510),(12.9410,80.1560),(12.9380,80.1590),(12.9350,80.1560),
+            (12.9320,80.1530),(12.9290,80.1510),(12.9270,80.1470),(12.9280,80.1430),
+            (12.9300,80.1410),(12.9310,80.1450),(12.9330,80.1490),(12.9360,80.1510),
+            (12.9390,80.1540),(12.9410,80.1570),(12.9390,80.1600),(12.9360,80.1580),
+            (12.9330,80.1550),(12.9310,80.1520),(12.9310,80.1500)],
+        4: [(12.9344,80.2120),(12.9380,80.2090),(12.9410,80.2060),(12.9440,80.2030),
+            (12.9460,80.2080),(12.9470,80.2140),(12.9450,80.2190),(12.9420,80.2210),
+            (12.9390,80.2200),(12.9360,80.2180),(12.9330,80.2160),(12.9300,80.2130),
+            (12.9290,80.2070),(12.9310,80.2030),(12.9330,80.2060),(12.9360,80.2090),
+            (12.9380,80.2120),(12.9400,80.2150),(12.9430,80.2170),(12.9420,80.2210),
+            (12.9390,80.2190),(12.9360,80.2150),(12.9344,80.2120)],
     }
+    # Stop specs: (start_minute, duration_minutes)
+    STOPS = {1: [(62, 42), (320, 38)], 2: [(75, 45), (300, 40)],
+             3: [(55, 50), (310, 35)], 4: [(80, 38), (330, 45)]}
+    TOTAL_MINUTES = 480
+
     now = datetime.utcnow()
     rows = []
-    for vid, (clat, clng) in CIRCUITS.items():
-        R_lat = 0.006   # ~660m north-south
-        R_lng = 0.008   # ~700m east-west (slightly wider oval)
-        steps = 160     # 3-min intervals × 160 = 8 hours
-        for step in range(steps):
-            minutes_ago = (steps - step) * 3
-            from datetime import timedelta
-            t = now - timedelta(minutes=minutes_ago)
-            angle = (step / steps) * 2 * math.pi + (vid * math.pi / 2)
-            lat = round(clat + R_lat * math.sin(angle), 6)
-            lng = round(clng + R_lng * math.cos(angle), 6)
-            rows.append((vid, lat, lng, "patrolling", 0.05,
-                         t.strftime("%Y-%m-%d %H:%M:%S")))
+    for vid in [1, 2, 3, 4]:
+        wps = ROUTES[vid]
+        stops = STOPS[vid]
+        shift_start = now - timedelta(minutes=TOTAL_MINUTES + 30)
+
+        # Build stopped-minute → position map
+        stop_pos = {}
+        n_wps = len(wps)
+        for start_m, dur_m in stops:
+            mid_wp = min(n_wps - 1, round(start_m / TOTAL_MINUTES * n_wps))
+            slat, slng = wps[mid_wp]
+            for m in range(start_m, start_m + dur_m):
+                stop_pos[m] = (slat, slng)
+
+        stopped = set(stop_pos.keys())
+        moving_minutes = TOTAL_MINUTES - len(stopped)
+        segment_len = max(1, moving_minutes / (n_wps - 1))
+
+        cur_lat, cur_lng = wps[0]
+        wp_idx = 0
+        seg_t = 0.0
+        prev_lat, prev_lng = cur_lat, cur_lng
+
+        for minute in range(TOTAL_MINUTES):
+            t = shift_start + timedelta(minutes=minute)
+            if minute in stopped:
+                slat, slng = stop_pos[minute]
+                jlat = slat + _rnd.uniform(-0.00005, 0.00005)
+                jlng = slng + _rnd.uniform(-0.00005, 0.00005)
+                km = _haversine(prev_lat, prev_lng, jlat, jlng)
+                rows.append((vid, round(jlat, 6), round(jlng, 6), "patrolling",
+                             round(km, 4), t.strftime("%Y-%m-%d %H:%M:%S")))
+                prev_lat, prev_lng = jlat, jlng
+            else:
+                km = _haversine(prev_lat, prev_lng, cur_lat, cur_lng)
+                rows.append((vid, round(cur_lat, 6), round(cur_lng, 6), "patrolling",
+                             round(km, 4), t.strftime("%Y-%m-%d %H:%M:%S")))
+                prev_lat, prev_lng = cur_lat, cur_lng
+                if wp_idx < n_wps - 1:
+                    seg_t += 1.0 / segment_len
+                    if seg_t >= 1.0:
+                        seg_t -= 1.0
+                        wp_idx = min(wp_idx + 1, n_wps - 2)
+                    t2 = max(0.0, min(1.0, seg_t))
+                    la1, lo1 = wps[wp_idx]
+                    la2, lo2 = wps[wp_idx + 1]
+                    cur_lat = la1 + (la2 - la1) * t2
+                    cur_lng = lo1 + (lo2 - lo1) * t2
 
     cursor.executemany(
         "INSERT INTO patrol_telemetry (vehicle_id, lat, lng, status, km_delta, recorded_at) VALUES (?,?,?,?,?,?)",
