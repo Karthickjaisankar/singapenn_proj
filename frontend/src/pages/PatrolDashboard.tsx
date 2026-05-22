@@ -38,6 +38,33 @@ const TYPE_COLOR: Record<string, string> = {
   other: "text-slate-400 bg-slate-500/15 border-slate-500/40",
 };
 
+// Simulated past complaints per patrol vehicle today
+const PAST_COMPLAINTS: Record<number, {
+  id: string; type: string; citizen: string; area: string;
+  time: string; outcome: "DSR" | "CSR"; notes: string;
+}[]> = {
+  1: [
+    { id: "A-201", type: "harassment",  citizen: "Ananya Krishnan",  area: "Vandalur Junction",  time: "08:45 am", outcome: "DSR", notes: "No incident confirmed. Verbal altercation resolved." },
+    { id: "A-204", type: "sos",         citizen: "Meena Selvam",     area: "Tambaram Market",    time: "10:20 am", outcome: "CSR", notes: "Victim found. FIR registered u/s 354A IPC." },
+    { id: "A-211", type: "suspicious",  citizen: "Deepa Venkatesh",  area: "GST Road, Vandalur", time: "01:15 pm", outcome: "DSR", notes: "Unknown person left on officer approach. Area secured." },
+  ],
+  2: [
+    { id: "A-202", type: "sos",         citizen: "Priya Rajan",      area: "Meenambakkam Metro", time: "09:10 am", outcome: "CSR", notes: "Victim escorted to Pallavaram AWPS. FIR to be filed." },
+    { id: "A-207", type: "harassment",  citizen: "Kavitha Nair",     area: "Pallavaram Market",  time: "11:40 am", outcome: "DSR", notes: "Shopkeeper warned. No crime found." },
+    { id: "A-215", type: "medical",     citizen: "Selvi Pandian",    area: "Tirusulam Junction", time: "02:55 pm", outcome: "DSR", notes: "Medical team arrived. Patrol assisted handover." },
+  ],
+  3: [
+    { id: "A-203", type: "harassment",  citizen: "Divya Mohan",      area: "Perungalathur Rd",   time: "09:30 am", outcome: "CSR", notes: "Perpetrator identified. Case referred to CI." },
+    { id: "A-209", type: "sos",         citizen: "Sumathi Arjun",    area: "Chromepet Tank Road",time: "12:15 pm", outcome: "CSR", notes: "Victim safe. Arrested suspect u/s 509 IPC." },
+  ],
+  4: [
+    { id: "A-205", type: "suspicious",  citizen: "Radha Suresh",     area: "Semmenchery Nagar",  time: "08:55 am", outcome: "DSR", notes: "Routine check. No threat found." },
+    { id: "A-208", type: "harassment",  citizen: "Nithya Prakash",   area: "Semmenchery East",   time: "11:00 am", outcome: "CSR", notes: "FIR lodged. Victim given protection number." },
+    { id: "A-213", type: "sos",         citizen: "Lalitha Ganesh",   area: "Okkiyam Thoraipakkam", time: "01:50 pm", outcome: "CSR", notes: "Victim rescued. Perpetrator detained." },
+    { id: "A-217", type: "suspicious",  citizen: "Bhavani Raj",      area: "Perungudi Main Road",time: "03:30 pm", outcome: "DSR", notes: "Unrelated activity. Area patrolled." },
+  ],
+};
+
 // ── helpers ────────────────────────────────────────────────────────────────
 
 function parseUTC(iso: string): Date {
@@ -269,22 +296,77 @@ export default function PatrolDashboard() {
           <div className="flex-1 overflow-y-auto">
 
             {/* ── STANDBY ── */}
-            {!myAlert && (
-              <div className="flex flex-col items-center justify-center h-full gap-4 px-6 py-12">
-                <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: `${color}18`, border: `1.5px solid ${color}44` }}>
-                  <Shield className="w-8 h-8" style={{ color }} />
+            {!myAlert && (() => {
+              const past = PAST_COMPLAINTS[vehicleId] ?? [];
+              const dsr  = past.filter(c => c.outcome === "DSR").length;
+              const csr  = past.filter(c => c.outcome === "CSR").length;
+              return (
+                <div className="flex flex-col h-full">
+                  {/* Status bar */}
+                  <div className="px-4 py-3 flex items-center gap-3 border-b border-border shrink-0">
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ background: `${color}20`, border: `1.5px solid ${color}50` }}>
+                      <Shield className="w-4 h-4" style={{ color }} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-text-primary font-bold text-sm leading-none">On Duty · Standby</p>
+                      <p className="text-text-muted text-[10px] mt-0.5">Awaiting dispatch from Command Centre</p>
+                    </div>
+                    <div className="flex items-center gap-1 text-[10px] text-green-400 bg-green-500/10 border border-green-500/20 rounded-full px-2 py-1 shrink-0">
+                      <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                      {ZONE_NAMES[vehicleId]}
+                    </div>
+                  </div>
+
+                  {/* KPI strip */}
+                  <div className="px-4 py-3 grid grid-cols-3 gap-2 border-b border-border shrink-0">
+                    <div className="bg-surface-L2 rounded-xl border border-border px-3 py-2 text-center">
+                      <p className="text-xl font-black text-text-primary">{past.length}</p>
+                      <p className="text-[9px] text-text-muted uppercase tracking-wider mt-0.5">Attended</p>
+                    </div>
+                    <div className="bg-blue-500/5 rounded-xl border border-blue-500/20 px-3 py-2 text-center">
+                      <p className="text-xl font-black text-blue-400">{dsr}</p>
+                      <p className="text-[9px] text-blue-400/70 uppercase tracking-wider mt-0.5">DSR</p>
+                    </div>
+                    <div className="bg-red-500/5 rounded-xl border border-red-500/20 px-3 py-2 text-center">
+                      <p className="text-xl font-black text-red-400">{csr}</p>
+                      <p className="text-[9px] text-red-400/70 uppercase tracking-wider mt-0.5">CSR</p>
+                    </div>
+                  </div>
+
+                  {/* Past complaints list */}
+                  <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-text-muted mb-2">Today's Cases</p>
+                    {past.length === 0 ? (
+                      <p className="text-center text-xs text-text-muted py-8">No complaints attended today</p>
+                    ) : past.map(c => (
+                      <div key={c.id} className="rounded-xl bg-surface-L2 border border-border p-3 space-y-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${TYPE_COLOR[c.type]}`}>
+                            {TYPE_LABEL[c.type] ?? c.type}
+                          </span>
+                          <span className={`text-[9px] font-black px-1.5 py-0.5 rounded shrink-0 ${
+                            c.outcome === "CSR"
+                              ? "bg-red-500/15 text-red-400 border border-red-500/30"
+                              : "bg-blue-500/15 text-blue-400 border border-blue-500/30"
+                          }`}>{c.outcome}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <User className="w-3 h-3 text-text-muted shrink-0" />
+                          <p className="text-[11px] font-semibold text-text-primary truncate">{c.citizen}</p>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-[10px] text-text-muted">
+                          <MapPin className="w-3 h-3 shrink-0" />
+                          <span className="truncate">{c.area}</span>
+                          <span className="shrink-0 ml-auto">{c.time}</span>
+                        </div>
+                        <p className="text-[10px] text-text-muted/70 leading-snug italic">{c.notes}</p>
+                        <p className="text-[9px] text-text-muted">{c.id}</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="text-center">
-                  <p className="text-text-primary font-bold text-base">On Duty · Standby</p>
-                  <p className="text-text-muted text-sm mt-1">No complaints assigned</p>
-                  <p className="text-text-muted/60 text-xs mt-0.5">Command Centre will dispatch alerts here</p>
-                </div>
-                <div className="flex items-center gap-2 text-[11px] text-green-400 bg-green-500/10 border border-green-500/20 rounded-full px-3 py-1.5">
-                  <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                  Monitoring {ZONE_NAMES[vehicleId]} AWPS Zone
-                </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* ── INCOMING DISPATCH ── */}
             {myAlert && isIncoming && (
