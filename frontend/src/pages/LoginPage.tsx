@@ -76,7 +76,7 @@ export default function LoginPage() {
       <div className="relative w-full max-w-sm">
         {/* Logo + title */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-transparent mb-4">
+          <div className="inline-flex items-center justify-center w-40 h-40 rounded-2xl bg-transparent mb-4">
             <img
               src="/singapenne-logo.png"
               alt="Singapenne"
