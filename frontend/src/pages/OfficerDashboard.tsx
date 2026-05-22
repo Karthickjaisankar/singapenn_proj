@@ -4,6 +4,7 @@ import { api } from "../api";
 import { useAlerts } from "../hooks/useAlerts";
 import Map from "../components/Map.tsx";
 import AnalyticsPanel from "../components/AnalyticsPanel";
+import PatrolTrailsView from "../components/PatrolTrailsView";
 import { Crime, PatrolZone, PatrolVehicle, Venue, ZoneRisk, AlertRow } from "../types";
 // ZoneRisk used by routing panel; PatrolZone used by AnalyticsPanel
 import { LogOut, Radio, Monitor, Sun, Moon } from "lucide-react";
@@ -29,7 +30,7 @@ const VEHICLE_COLORS: Record<number, string> = {
   4: "#f59e0b",
 };
 
-type ViewTab = "map" | "analytics";
+type ViewTab = "map" | "analytics" | "trails";
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -286,7 +287,7 @@ function StatsPanel({
                       style={{ background: idColor, boxShadow: `0 0 4px ${idColor}88` }}
                     />
                     <div className="min-w-0">
-                      <p className="text-[10px] font-bold leading-none" style={{ color: idColor }}>PPV-{v.id}</p>
+                      <p className="text-[10px] font-bold leading-none" style={{ color: idColor }}>Patrol {v.id}</p>
                       <p className="text-[9px] capitalize mt-0.5" style={{ color: sc }}>{v.status}</p>
                     </div>
                   </div>
@@ -471,7 +472,7 @@ function ComplaintDetail({
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[11px] font-bold text-text-primary">PPV-{v.id}</span>
+                    <span className="text-[11px] font-bold text-text-primary">Patrol {v.id}</span>
                     {i === 0 && !isAssigned && (
                       <span className="text-[9px] px-1 rounded bg-green-500/15 text-green-400 font-bold">
                         NEAREST
@@ -539,7 +540,7 @@ function ComplaintDetail({
         {effectiveAssigned !== null && !isReached && (
           <div className="mt-2.5 flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-500/10 border border-blue-500/30">
             <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse shrink-0" />
-            <span className="text-xs font-semibold text-blue-400">PPV-{effectiveAssigned} en route…</span>
+            <span className="text-xs font-semibold text-blue-400">Patrol {effectiveAssigned} en route…</span>
           </div>
         )}
       </div>
@@ -694,7 +695,7 @@ function ComplaintsFeed({
                     )}
                     {rowDispVid !== null && !rowReached && alert.status !== "on_scene" && (
                       <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/20">
-                        PPV-{rowDispVid} En Route
+                        Patrol {rowDispVid} En Route
                       </span>
                     )}
                     {alert.status === "pending" && rowDispVid === null && (
@@ -925,6 +926,7 @@ export default function OfficerDashboard() {
           {([
             { key: "map"       as ViewTab, label: "Live Map View" },
             { key: "analytics" as ViewTab, label: "Live Analytics" },
+            { key: "trails"    as ViewTab, label: "Patrol Trails" },
           ]).map(t => (
             <button
               key={t.key}
@@ -969,7 +971,11 @@ export default function OfficerDashboard() {
       </div>
 
       {/* ── Tab content ── */}
-      {activeTab === "map" ? (
+      {activeTab === "trails" ? (
+        <div className="flex-1 overflow-hidden">
+          <PatrolTrailsView token={user?.token ?? ""} />
+        </div>
+      ) : activeTab === "map" ? (
         <div className="flex flex-1 overflow-hidden">
 
           {/* Left: aggregate stats */}

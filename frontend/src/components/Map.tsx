@@ -96,6 +96,13 @@ const VEHICLE_COLORS: Record<number, string> = {
   4: "#f59e0b", // amber
 };
 
+const VEHICLE_OFFICERS: Record<number, { name: string; phone: string }> = {
+  1: { name: "Const. Ravi Kumar",   phone: "9841000021" },
+  2: { name: "Const. Kavitha Devi", phone: "9841000022" },
+  3: { name: "Const. Arjun Singh",  phone: "9841000023" },
+  4: { name: "Const. Meena Rani",   phone: "9841000024" },
+};
+
 function vehicleColor(id: number): string {
   return VEHICLE_COLORS[id] ?? "#ec4899";
 }
@@ -604,12 +611,14 @@ export default function Map({
         icon: createVehicleIcon(v.id, v.status),
         zIndexOffset: 1000,
       });
+      const officer = VEHICLE_OFFICERS[v.id] ?? { name: "Unknown", phone: "—" };
       mk.bindPopup(
         `<div style="font-size:12px;min-width:200px">
-          <div style="font-weight:700;color:${vehicleColor(v.id)};font-size:13px">PPV-${v.id}</div>
-          <div style="color:#475569;font-size:11px;margin-top:4px;line-height:1.6">
-            <div><b>Status:</b> <span style="text-transform:capitalize;font-weight:600">${v.status}</span></div>
-            <div><b>Zone:</b> ${v.zone_id}</div>
+          <div style="font-weight:700;color:${vehicleColor(v.id)};font-size:13px;margin-bottom:6px">Patrol ${v.id}</div>
+          <div style="font-size:11px;line-height:1.9;color:#94a3b8">
+            <div>👮 <span style="color:#e2e8f0;font-weight:600">${officer.name}</span></div>
+            <div>📞 <span style="color:#e2e8f0">${officer.phone}</span></div>
+            <div>📡 <span style="text-transform:capitalize;font-weight:600;color:#e2e8f0">${v.status}</span></div>
           </div>
         </div>`
       );
@@ -945,7 +954,7 @@ export default function Map({
                 className="w-3 h-3 rounded-sm shrink-0"
                 style={{ background: vehicleColor(id), boxShadow: `0 0 5px ${vehicleColor(id)}88` }}
               />
-              <span className="text-[11px] text-text-secondary">PPV-{id}</span>
+              <span className="text-[11px] text-text-secondary">Patrol {id}</span>
             </div>
           ))}
           <div className="flex items-center gap-2">
@@ -961,7 +970,7 @@ export default function Map({
               {([1, 2, 3, 4] as const).map(id => (
                 <div key={id} className="flex items-center gap-2">
                   <div className="w-7 h-1.5 rounded-full shrink-0" style={{ background: vehicleColor(id), opacity: 0.7 }} />
-                  <span className="text-[11px] text-text-secondary">PPV-{id} today</span>
+                  <span className="text-[11px] text-text-secondary">Patrol {id} today</span>
                 </div>
               ))}
             </div>

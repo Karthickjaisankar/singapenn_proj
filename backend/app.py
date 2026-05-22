@@ -125,6 +125,27 @@ def derive_time_slot(date_of_occurrence):
         return "night"
 
 
+PATROL_CIRCUITS = {
+    1: (12.9398, 80.1323), 2: (12.9657, 80.1588),
+    3: (12.9314, 80.1496), 4: (12.9344, 80.2120),
+}
+PATROL_R_LAT = 0.006
+PATROL_R_LNG = 0.008
+PATROL_PERIOD_MIN = 480  # 8-hour loop per vehicle
+
+
+def _oval_position(vehicle_id: int) -> tuple[float, float]:
+    """Compute vehicle position on its oval patrol circuit based on current UTC time."""
+    clat, clng = PATROL_CIRCUITS.get(vehicle_id, (12.9349, 80.1706))
+    t = datetime.utcnow()
+    minutes = t.hour * 60 + t.minute
+    angle = (minutes / PATROL_PERIOD_MIN) * 2 * math.pi + (vehicle_id * math.pi / 2)
+    return (
+        round(clat + PATROL_R_LAT * math.sin(angle), 6),
+        round(clng + PATROL_R_LNG * math.cos(angle), 6),
+    )
+
+
 def _haversine_distance(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     """Calculate distance in km between two coordinates using Haversine formula."""
     R = 6371  # Earth's radius in km
@@ -300,13 +321,16 @@ async def _patrol_telemetry_loop():
         try:
             with _LOCK:
                 vehicles = list(_STATE["vehicles"])
-            today = datetime.utcnow().strftime("%Y-%m-%d")
             for v in vehicles:
+                if v["status"] == "patrolling":
+                    lat, lng = _oval_position(v["id"])
+                else:
+                    lat, lng = v["lat"], v["lng"]
                 last = get_last_telemetry(v["id"])
                 km = 0.0
                 if last:
-                    km = _haversine_distance(last["lat"], last["lng"], v["lat"], v["lng"])
-                log_patrol_position(v["id"], v["lat"], v["lng"], v["status"], km)
+                    km = _haversine_distance(last["lat"], last["lng"], lat, lng)
+                log_patrol_position(v["id"], lat, lng, v["status"], km)
         except Exception as e:
             print(f"Telemetry loop error: {e}")
 

@@ -194,7 +194,7 @@ export default function AnalyticsPanel({ crimes, patrolZones, vehicles: _vehicle
     windowAlerts.forEach(a => {
       if (a.dispatched_vehicle_id) counts[a.dispatched_vehicle_id] = (counts[a.dispatched_vehicle_id] ?? 0) + 1;
     });
-    return [1, 2, 3, 4].map(id => ({ name: `PPV-${id}`, count: counts[id] ?? 0, id }));
+    return [1, 2, 3, 4].map(id => ({ name: `Patrol ${id}`, count: counts[id] ?? 0, id }));
   }, [windowAlerts]);
 
   const avgResponseMin = useMemo(() => {
@@ -405,7 +405,7 @@ export default function AnalyticsPanel({ crimes, patrolZones, vehicles: _vehicle
                 <ChartCard
                   title="Dispatches by Vehicle"
                   icon={<Navigation className="w-4 h-4 text-blue-400" />}
-                  sub={`Alert assignments per PPV in last ${liveWindow}h`}
+                  sub={`Alert assignments per Patrol vehicle in last ${liveWindow}h`}
                 >
                   <ResponsiveContainer width="100%" height={120}>
                     <BarChart data={vehicleDispatch} layout="vertical" margin={{ top: 0, right: 24, left: 5, bottom: 0 }}>

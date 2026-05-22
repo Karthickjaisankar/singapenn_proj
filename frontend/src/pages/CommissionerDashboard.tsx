@@ -5,6 +5,9 @@ import { useTheme } from "../contexts/ThemeContext";
 import { api } from "../api";
 import { Crime, PatrolZone, PatrolVehicle, AlertRow, CommissionerSummary } from "../types";
 import AnalyticsPanel from "../components/AnalyticsPanel";
+import PatrolTrailsView from "../components/PatrolTrailsView";
+
+type CommView = "analytics" | "trails";
 
 function KpiCard({
   label, value, sub, accent,
@@ -40,6 +43,7 @@ export default function CommissionerDashboard() {
   const { user, logout } = useAuth();
   const { theme, toggle } = useTheme();
 
+  const [activeTab, setActiveTab] = useState<CommView>("analytics");
   const [summary, setSummary] = useState<CommissionerSummary | null>(null);
   const [crimes, setCrimes] = useState<Crime[]>([]);
   const [patrolZones, setPatrolZones] = useState<PatrolZone[]>([]);
@@ -82,6 +86,25 @@ export default function CommissionerDashboard() {
           <p className="text-[10px] text-text-muted mt-0.5">{user?.full_name ?? "Commissioner"}</p>
         </div>
         <div className="flex-1" />
+        {/* Tab switcher */}
+        <div className="flex items-center bg-surface-L2 rounded-lg p-0.5 gap-0.5 mr-2">
+          {([
+            { key: "analytics" as CommView, label: "Live Analytics" },
+            { key: "trails"    as CommView, label: "Patrol Trails" },
+          ]).map(t => (
+            <button
+              key={t.key}
+              onClick={() => setActiveTab(t.key)}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition ${
+                activeTab === t.key
+                  ? "bg-blue-600 text-white shadow"
+                  : "text-text-secondary hover:text-text-primary"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
         <button
           onClick={toggle}
           title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
@@ -137,15 +160,21 @@ export default function CommissionerDashboard() {
         />
       </div>
 
-      {/* Full-width Analytics */}
-      <div className="flex-1 overflow-y-auto">
-        <AnalyticsPanel
-          crimes={crimes}
-          patrolZones={patrolZones}
-          vehicles={vehicles}
-          activeAlerts={activeAlerts}
-          token={user?.token}
-        />
+      {/* Tab content */}
+      <div className="flex-1 overflow-hidden">
+        {activeTab === "trails" ? (
+          <PatrolTrailsView token={user?.token ?? ""} />
+        ) : (
+          <div className="h-full overflow-y-auto">
+            <AnalyticsPanel
+              crimes={crimes}
+              patrolZones={patrolZones}
+              vehicles={vehicles}
+              activeAlerts={activeAlerts}
+              token={user?.token}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

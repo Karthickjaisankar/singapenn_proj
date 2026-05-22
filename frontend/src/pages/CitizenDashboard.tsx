@@ -295,7 +295,7 @@ export default function CitizenDashboard() {
                   <div className="w-2.5 h-2.5 rounded-full bg-white animate-pulse shrink-0" />
                   <div>
                     <p className="text-sm font-bold leading-tight">Alert sent — Police notified</p>
-                    <p className="text-xs text-amber-100 mt-0.5">Connecting to the nearest Police Patrol Vehicle…</p>
+                    <p className="text-xs text-amber-100 mt-0.5">Connecting to the nearest Patrol Vehicle…</p>
                   </div>
                 </div>
               </div>
@@ -308,7 +308,7 @@ export default function CitizenDashboard() {
                   <div className="w-2.5 h-2.5 rounded-full bg-white animate-pulse shrink-0" />
                   <div>
                     <p className="text-sm font-bold leading-tight">Police are reviewing your alert</p>
-                    <p className="text-xs text-blue-200 mt-0.5">A Police Patrol Vehicle is being assigned to your location…</p>
+                    <p className="text-xs text-blue-200 mt-0.5">A Patrol Vehicle is being assigned to your location…</p>
                   </div>
                 </div>
               </div>
@@ -325,7 +325,7 @@ export default function CitizenDashboard() {
                       <CheckCircle2 className="w-5 h-5 text-white" />
                       <span className="text-white font-black text-base">Police is on the way</span>
                     </div>
-                    <p className="text-green-200 text-xs">{dispatchInfo.officerName} · Police Patrol Vehicle {dispatchInfo.vehicleId} has been assigned to your alert</p>
+                    <p className="text-green-200 text-xs">{dispatchInfo.officerName} · Patrol {dispatchInfo.vehicleId} has been assigned to your alert</p>
                   </div>
                   {/* ETA */}
                   <div className="px-5 py-4">

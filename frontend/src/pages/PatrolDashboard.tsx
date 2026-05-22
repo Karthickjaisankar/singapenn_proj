@@ -238,8 +238,6 @@ export default function PatrolDashboard() {
   // "incoming" = dispatched but patrol hasn't accepted (acknowledged) yet
   const isIncoming = myAlert && myAlert.status === "dispatched";
 
-  const hasActiveAlert = myAlert && (isAccepted || isOnScene);
-
   return (
     <div className="h-screen bg-[#0f1117] flex flex-col overflow-hidden">
       {/* Header */}
@@ -248,7 +246,7 @@ export default function PatrolDashboard() {
           {vehicleId}
         </div>
         <div>
-          <p className="text-sm font-black text-white leading-none">PPV-{vehicleId} · Patrol</p>
+          <p className="text-sm font-black text-white leading-none">Patrol {vehicleId}</p>
           <p className="text-[10px] text-slate-500 mt-0.5">{user?.full_name}</p>
         </div>
         <div className="flex-1" />
@@ -317,7 +315,7 @@ export default function PatrolDashboard() {
           {/* Standby label when no active alert */}
           {!myAlert && (
             <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] bg-[#1a1d27]/90 border border-[#2e3347] text-slate-400 text-xs font-semibold px-3 py-1.5 rounded-full shadow">
-              Monitoring zone for PPV-{vehicleId}
+              Monitoring zone for Patrol {vehicleId}
             </div>
           )}
           {/* Location badge */}
@@ -343,7 +341,7 @@ export default function PatrolDashboard() {
             </div>
             <p className="text-white font-bold text-base">On Duty · Standby</p>
             <p className="text-slate-500 text-sm mt-1">No active dispatch</p>
-            <p className="text-slate-600 text-xs mt-0.5">Monitoring zone for PPV-{vehicleId}</p>
+            <p className="text-slate-600 text-xs mt-0.5">Monitoring zone for Patrol {vehicleId}</p>
           </div>
         )}
 
