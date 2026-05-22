@@ -739,11 +739,11 @@ export default function PatrolDashboard() {
                           <div className={`text-sm px-3 py-2 rounded-2xl max-w-[85%] ${
                             mine
                               ? "bg-blue-600 text-white rounded-tr-sm"
-                              : "bg-green-600/18 border border-green-500/30 text-green-200 rounded-tl-sm"
+                              : "bg-green-600 text-white rounded-tl-sm"
                           }`}>
-                            {!mine && <p className="text-[9px] text-green-400 font-bold mb-0.5 uppercase">Citizen</p>}
+                            {!mine && <p className="text-[9px] text-green-100 font-bold mb-0.5 uppercase">Citizen</p>}
                             <p className="leading-snug">{m.body}</p>
-                            <p className={`text-[10px] mt-0.5 ${mine ? "text-blue-200 text-right" : "text-green-400"}`}>
+                            <p className={`text-[10px] mt-0.5 ${mine ? "text-blue-200 text-right" : "text-green-100"}`}>
                               {timeAgo(m.created_at)}
                             </p>
                           </div>
