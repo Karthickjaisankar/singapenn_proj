@@ -7,7 +7,7 @@ import {
 } from "recharts";
 import { TrendingUp, Clock, AlertTriangle, Shield, Navigation, Activity, Zap } from "lucide-react";
 import { api } from "../api";
-import { Crime, Stats, PatrolZone, PatrolVehicle, AlertRow } from "../types";
+import { Crime, Stats, PatrolZone, PatrolVehicle, AlertRow, AlertType, AlertStatus } from "../types";
 import KpiCard from "./KpiCard";
 
 function toUTC(iso: string): Date {
@@ -40,6 +40,51 @@ const ALERT_TYPE_COLORS: Record<string, string> = {
 };
 
 const VEHICLE_COLORS: Record<number, string> = { 1: "#3b82f6", 2: "#10b981", 3: "#a855f7", 4: "#f59e0b" };
+
+// ── Demo alert generation (timestamps relative to now) ────────────────────────
+function generateDemoAlerts(): AlertRow[] {
+  const now = Date.now();
+  const ts  = (hoursAgo: number, minutesOffset = 0) =>
+    new Date(now - hoursAgo * 3_600_000 - minutesOffset * 60_000)
+      .toISOString().replace("T", " ").replace(/\.\d{3}Z$/, "");
+  const res = (hoursAgo: number, minsLater: number) =>
+    new Date(now - hoursAgo * 3_600_000 + minsLater * 60_000)
+      .toISOString().replace("T", " ").replace(/\.\d{3}Z$/, "");
+
+  const row = (
+    id: number, type: AlertType, status: AlertStatus, vid: number | null,
+    hoursAgo: number, minOffset: number, resolveMins: number | null,
+    citizen_name: string,
+  ): AlertRow => ({
+    id, citizen_id: -id, citizen_name, alert_type: type, description: null,
+    lat: 12.93 + Math.sin(id) * 0.01, lng: 80.17 + Math.cos(id) * 0.01,
+    status, dispatched_vehicle_id: vid,
+    acknowledged_by: vid ? 1 : null, resolved_by: resolveMins !== null ? 1 : null,
+    eta_minutes: vid ? 5 + (id % 4) : null,
+    created_at: ts(hoursAgo, minOffset),
+    updated_at: ts(hoursAgo, minOffset),
+    resolved_at: resolveMins !== null ? res(hoursAgo, resolveMins) : null,
+  });
+
+  return [
+    row(-1,  "harassment",  "resolved",   1, 10, 15, 12, "Ananya Krishnan"),
+    row(-2,  "suspicious",  "resolved",   2,  9, 30, 15, "Meena Sundaram"),
+    row(-3,  "sos",         "resolved",   1,  8, 45,  8, "Deepa Rajan"),
+    row(-4,  "medical",     "resolved",   3,  8, 10, 18, "Priya Velu"),
+    row(-5,  "harassment",  "resolved",   4,  7, 50, 14, "Kavitha Nair"),
+    row(-6,  "suspicious",  "resolved",   2,  7,  5, 11, "Selvi Pandian"),
+    row(-7,  "sos",         "resolved",   1,  6, 30,  9, "Divya Mohan"),
+    row(-8,  "harassment",  "resolved",   3,  5, 45, 13, "Sumathi Arjun"),
+    row(-9,  "sos",         "resolved",   2,  4, 20, 10, "Radha Suresh"),
+    row(-10, "suspicious",  "resolved",   4,  3, 55, 16, "Nithya Prakash"),
+    row(-11, "harassment",  "dispatched", 4,  3,  0, null, "Lalitha Ganesh"),
+    row(-12, "sos",         "on_scene",   1,  2, 15, null, "Bhavani Raj"),
+    row(-13, "harassment",  "dispatched", 2,  1, 40, null, "Usha Mani"),
+    row(-14, "suspicious",  "pending",    null, 1, 20, null, "Saranya Kumar"),
+    row(-15, "medical",     "pending",    null, 0, 40, null, "Geetha Devi"),
+    row(-16, "sos",         "pending",    null, 0, 10, null, "Renuka Balan"),
+  ];
+}
 
 type LiveWindow = 2 | 6 | 10 | 24;
 type HistPeriod = "1w" | "1m" | "6m" | "1y" | "3y" | "All";
@@ -156,11 +201,16 @@ export default function AnalyticsPanel({ crimes, patrolZones, vehicles: _vehicle
 
   // ── Live Analytics ────────────────────────────────────────────────────────
 
+  // Demo alerts are generated once on mount (negative IDs, real alerts always win)
+  const demoAlerts = useMemo(() => generateDemoAlerts(), []);
+
   const windowMs = liveWindow * 3600_000;
-  const windowAlerts = useMemo(
-    () => activeAlerts.filter(a => Date.now() - toUTC(a.created_at).getTime() <= windowMs),
-    [activeAlerts, windowMs],
-  );
+  const windowAlerts = useMemo(() => {
+    // Merge real + demo, deduplicate by id (real positive IDs override demo negative IDs)
+    const realIds = new Set(activeAlerts.map(a => a.id));
+    const merged = [...activeAlerts, ...demoAlerts.filter(a => !realIds.has(a.id))];
+    return merged.filter(a => Date.now() - toUTC(a.created_at).getTime() <= windowMs);
+  }, [activeAlerts, demoAlerts, windowMs]);
 
   const liveKpis = useMemo(() => ({
     total:      windowAlerts.length,
