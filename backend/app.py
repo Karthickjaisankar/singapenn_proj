@@ -1158,6 +1158,138 @@ def health_check():
     return {"status": "ok"}
 
 
+if os.getenv("DEMO_MODE") == "1":
+
+    # Holds the active demo alert ID across steps
+    _DEMO = {"alert_id": None}
+
+    def _demo_user_id(username: str) -> int:
+        conn = get_conn()
+        row = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
+        conn.close()
+        if not row:
+            raise HTTPException(400, f"Demo user '{username}' not found")
+        return row[0]
+
+    @app.post("/api/demo/reset")
+    async def demo_reset():
+        conn = get_conn()
+        conn.execute("DELETE FROM alert_messages")
+        conn.execute("DELETE FROM alerts")
+        conn.commit()
+        conn.close()
+        _DEMO["alert_id"] = None
+        # Return PPV-1 to patrolling
+        with _LOCK:
+            for v in _STATE["vehicles"]:
+                if v["id"] == 1:
+                    v["status"] = "patrolling"
+                    v["incident_location"] = None
+        await ws_manager.broadcast({"type": "demo_reset"})
+        return {"status": "reset"}
+
+    @app.post("/api/demo/step/raise-sos")
+    async def demo_raise_sos():
+        """Step 1 — create SOS alert as citizen1."""
+        citizen_id = _demo_user_id("citizen1")
+        alert = create_alert(
+            citizen_id=citizen_id,
+            alert_type="Harassment",
+            description="Man following me near the bus stand. I am scared.",
+            lat=12.9314,
+            lng=80.1496,
+        )
+        _DEMO["alert_id"] = alert["id"]
+        await ws_manager.broadcast({"type": "alert_created", "alert": alert})
+        return {"status": "ok", "alert_id": alert["id"]}
+
+    @app.post("/api/demo/step/dispatch")
+    async def demo_dispatch():
+        """Step 2 — officer dispatches PPV-1."""
+        alert_id = _DEMO.get("alert_id")
+        if not alert_id:
+            raise HTTPException(400, "No active demo alert — run raise-sos first")
+        with _LOCK:
+            v = next((x for x in _STATE["vehicles"] if x["id"] == 1), None)
+            if v:
+                v["status"] = "responding"
+                v["incident_location"] = [12.9314, 80.1496]
+                v["current_route"] = [[v["lat"], v["lng"]], [12.9314, 80.1496]]
+        alert = update_alert_status(alert_id, status="dispatched", vehicle_id=1, eta_minutes=4)
+        await ws_manager.broadcast({"type": "alert_updated", "alert": alert})
+        return {"status": "ok"}
+
+    @app.post("/api/demo/step/patrol-accept")
+    async def demo_patrol_accept():
+        """Step 3 — patrol1 accepts the dispatched alert."""
+        alert_id = _DEMO.get("alert_id")
+        if not alert_id:
+            raise HTTPException(400, "No active demo alert")
+        officer_id = _demo_user_id("patrol1")
+        alert = update_alert_status(alert_id, status="acknowledged", officer_id=officer_id)
+        await ws_manager.broadcast({"type": "alert_updated", "alert": alert})
+        return {"status": "ok"}
+
+    @app.post("/api/demo/step/chat")
+    async def demo_chat():
+        """Step 4 — exchange three demo chat messages with delays."""
+        import asyncio
+        alert_id = _DEMO.get("alert_id")
+        if not alert_id:
+            raise HTTPException(400, "No active demo alert")
+        patrol_id  = _demo_user_id("patrol1")
+        citizen_id = _demo_user_id("citizen1")
+
+        msg1 = create_alert_message(alert_id, patrol_id, "patrol",
+                                    "On my way — ETA 4 min. Stay calm, I am close.")
+        await ws_manager.broadcast({"type": "alert_updated",
+                                    "alert": get_alert_by_id(alert_id)})
+        await asyncio.sleep(4)
+
+        msg2 = create_alert_message(alert_id, citizen_id, "citizen",
+                                    "I am near the tea shop on the main road.")
+        await ws_manager.broadcast({"type": "alert_updated",
+                                    "alert": get_alert_by_id(alert_id)})
+        await asyncio.sleep(3)
+
+        msg3 = create_alert_message(alert_id, patrol_id, "patrol",
+                                    "I can see you. Stay where you are.")
+        await ws_manager.broadcast({"type": "alert_updated",
+                                    "alert": get_alert_by_id(alert_id)})
+        _ = msg1, msg2, msg3  # silence unused warnings
+        return {"status": "ok"}
+
+    @app.post("/api/demo/step/arrive")
+    async def demo_arrive():
+        """Step 5 — patrol marks arrival on scene."""
+        alert_id = _DEMO.get("alert_id")
+        if not alert_id:
+            raise HTTPException(400, "No active demo alert")
+        alert = update_alert_status(alert_id, status="on_scene")
+        await ws_manager.broadcast({"type": "alert_updated", "alert": alert})
+        return {"status": "ok"}
+
+    @app.post("/api/demo/step/file-csr")
+    async def demo_file_csr():
+        """Step 6 — patrol files CSR, alert resolves."""
+        alert_id = _DEMO.get("alert_id")
+        if not alert_id:
+            raise HTTPException(400, "No active demo alert")
+        alert = update_alert_report(
+            alert_id,
+            "CSR",
+            "Victim located. Perpetrator identified. Escorting victim to Vandalur AWPS.",
+        )
+        with _LOCK:
+            v = next((x for x in _STATE["vehicles"] if x["id"] == 1), None)
+            if v:
+                v["status"] = "patrolling"
+                v["incident_location"] = None
+        await ws_manager.broadcast({"type": "alert_updated", "alert": alert})
+        _DEMO["alert_id"] = None
+        return {"status": "ok"}
+
+
 # Serve built frontend (production only — skipped when dist/ doesn't exist in dev)
 _frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
 if os.path.isdir(_frontend_dist):

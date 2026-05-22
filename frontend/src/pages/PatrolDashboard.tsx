@@ -104,11 +104,15 @@ export default function PatrolDashboard() {
   const { user, logout } = useAuth();
   const vehicleId = user?.vehicle_id ?? 0;
   const color = VEHICLE_COLORS[vehicleId] ?? "#3b82f6";
-  const { myAlert, alertQueue: realQueue, connected } = usePatrolAlerts(user?.token ?? "", vehicleId);
-  // Use real queue if populated, otherwise show demo data
+  const { myAlert: realMyAlert, alertQueue: realQueue, connected } = usePatrolAlerts(user?.token ?? "", vehicleId);
+  // Demo active alert: simulates accepted state for negative-ID demo items
+  const [demoActive, setDemoActive] = useState<any | null>(null);
+  // Real alert always wins over demo
+  const myAlert = realMyAlert ?? demoActive;
+  // Use real queue if populated, otherwise show demo data (minus any accepted demo item)
   const alertQueue = realQueue.length > 0
     ? realQueue
-    : (DEMO_QUEUE[vehicleId] ?? []) as any[];
+    : (DEMO_QUEUE[vehicleId] ?? []).filter((c: any) => c.id !== demoActive?.id) as any[];
 
   // Alert interaction state
   const [messages, setMessages]     = useState<AlertMessage[]>([]);
@@ -141,6 +145,9 @@ export default function PatrolDashboard() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // ── effects ──
+
+  // If a real alert arrives, clear demo state
+  useEffect(() => { if (realMyAlert) setDemoActive(null); }, [realMyAlert?.id]);
 
   // Reset investigation state when alert changes
   useEffect(() => { setInvestigated(false); setReportType(null); setReportNotes(""); }, [myAlert?.id]);
@@ -185,14 +192,40 @@ export default function PatrolDashboard() {
   // ── handlers ──
 
   const handleAcceptQueued = useCallback(async (alertId: number) => {
-    if (!user?.token || alertId < 0) return; // negative = demo, skip real API
+    if (!user?.token) return;
+    if (alertId < 0) {
+      // Demo item — simulate accepted state locally
+      const item = (DEMO_QUEUE[vehicleId] ?? []).find((c: any) => c.id === alertId);
+      if (item) {
+        setDemoActive({
+          ...item,
+          status: "acknowledged",
+          citizen_id: 0,
+          dispatched_vehicle_id: vehicleId,
+          description: item.description,
+          citizen_name: item.citizen_name,
+          citizen_phone: item.citizen_phone,
+        });
+      }
+      setExpandedId(null);
+      return;
+    }
     try { await api.acceptAlert(user.token, alertId); } catch { /* WS updates */ }
-  }, [user?.token]);
+    setExpandedId(null);
+  }, [user?.token, vehicleId]);
 
   const handleReject = useCallback(async (alertId: number) => {
-    if (!user?.token || !rejectReason.trim()) return;
+    if (!rejectReason.trim()) return;
     setRejecting(true);
     try {
+      if (alertId < 0) {
+        // Demo reject — just clear locally
+        setRejectingId(null);
+        setRejectReason("");
+        setExpandedId(null);
+        return;
+      }
+      if (!user?.token) return;
       await api.rejectAlert(user.token, alertId, rejectReason.trim());
       setRejectingId(null);
       setRejectReason("");
@@ -207,19 +240,39 @@ export default function PatrolDashboard() {
   }, [myAlert, user?.token]);
 
   const handleArrive = useCallback(async () => {
-    if (!myAlert || !user?.token) return;
+    if (!myAlert) return;
+    if (myAlert.id < 0) {
+      setDemoActive((prev: any) => prev ? { ...prev, status: "on_scene" } : prev);
+      return;
+    }
+    if (!user?.token) return;
     setArriving(true);
     try { await api.patrolArrive(user.token, myAlert.id); } catch { /* WS updates */ } finally { setArriving(false); }
   }, [myAlert, user?.token]);
 
   const handleFileReport = useCallback(async () => {
-    if (!myAlert || !user?.token || !reportType) return;
+    if (!myAlert || !reportType) return;
+    if (myAlert.id < 0) {
+      setDemoActive(null);
+      return;
+    }
+    if (!user?.token) return;
     setFilingReport(true);
     try { await api.patrolFileReport(user.token, myAlert.id, reportType, reportNotes); } catch { /* WS updates */ } finally { setFilingReport(false); }
   }, [myAlert, user?.token, reportType, reportNotes]);
 
   const sendMessage = useCallback(async (body: string) => {
-    if (!myAlert || !user?.token || !body.trim()) return;
+    if (!myAlert || !body.trim()) return;
+    if (myAlert.id < 0) {
+      // Demo: append message locally
+      setMessages(prev => [...prev, {
+        id: Date.now(), alert_id: myAlert.id,
+        sender_id: 0, sender_role: "patrol", body, created_at: new Date().toISOString(),
+      } as any]);
+      setCustomMsg("");
+      return;
+    }
+    if (!user?.token) return;
     setSending(true);
     try {
       const res = await api.sendPatrolMessage(user.token, myAlert.id, body.trim());
@@ -300,6 +353,7 @@ export default function PatrolDashboard() {
             selectedAlertId={myAlert?.id ?? null}
             navTarget={navTarget}
             token={user?.token}
+            myVehicleId={vehicleId}
           />
 
           {/* Navigate to Victim button — overlaid on map */}
@@ -359,7 +413,7 @@ export default function PatrolDashboard() {
                     const ageMin = Math.round((Date.now() - new Date(c.created_at).getTime()) / 60000);
                     return (
                       <div key={c.id} className={`rounded-xl border transition-all ${
-                        isExpanded ? "border-amber-500/40 bg-amber-500/5" : "border-border bg-surface-L2"
+                        isExpanded ? "border-amber-500/40 bg-amber-500/5" : `border-border bg-surface-L2 ${!isRejectOpen ? "glow-red" : ""}`
                       }`}>
                         {/* Collapsed row */}
                         <button

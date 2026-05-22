@@ -1,13 +1,11 @@
 import { useEffect, useState, useMemo } from "react";
 import {
   BarChart, Bar, PieChart, Pie, Cell,
-  LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, ReferenceLine, LabelList,
 } from "recharts";
 import { TrendingUp, Clock, AlertTriangle, Shield, Navigation, Activity, Zap } from "lucide-react";
-import { api } from "../api";
-import { Crime, Stats, PatrolZone, PatrolVehicle, AlertRow, AlertType, AlertStatus } from "../types";
+import { Crime, PatrolZone, PatrolVehicle, AlertRow, AlertType, AlertStatus } from "../types";
 import KpiCard from "./KpiCard";
 
 function toUTC(iso: string): Date {
@@ -15,7 +13,6 @@ function toUTC(iso: string): Date {
 }
 
 // ── Simulated current-month constants ────────────────────────────────────────
-const SIM_MAY_2026 = 22;
 const PROJECTED_2026_FULL = 197;
 
 const GRID_COLOR = "#2e3347";
@@ -40,6 +37,20 @@ const ALERT_TYPE_COLORS: Record<string, string> = {
 };
 
 const VEHICLE_COLORS: Record<number, string> = { 1: "#3b82f6", 2: "#10b981", 3: "#a855f7", 4: "#f59e0b" };
+
+// Zone filter config — keywords matched against c.police_station (case-insensitive)
+const ZONE_FILTERS = [
+  { label: "All Zones",           keywords: [] as string[] },
+  { label: "PPV-1 · Tambaram",    keywords: ["tambaram"] },
+  { label: "PPV-2 · Pallavaram",  keywords: ["pallavaram"] },
+  { label: "PPV-3 · Vandalur",    keywords: ["vandalur", "selaiyur", "perumpakkam"] },
+  { label: "PPV-4 · Semmenchery", keywords: ["semmenchery", "kelambakkam", "kannagi"] },
+];
+
+// Normalise c.head ("POCSO Rape" → "pocso_rape") to match HEAD_LABELS keys
+function normalizeHead(h: string): string {
+  return h.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+}
 
 // ── Demo alert generation (timestamps relative to now) ────────────────────────
 function generateDemoAlerts(): AlertRow[] {
@@ -189,15 +200,12 @@ export interface AnalyticsPanelProps {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function AnalyticsPanel({ crimes, patrolZones, vehicles: _vehicles, activeAlerts, token: _token }: AnalyticsPanelProps) {
-  const [stats, setStats] = useState<Stats | null>(null);
+export default function AnalyticsPanel({ crimes, patrolZones: _patrolZones, vehicles: _vehicles, activeAlerts, token: _token }: AnalyticsPanelProps) {
   const [analyticsTab, setAnalyticsTab] = useState<"live" | "historical">("live");
   const [liveWindow, setLiveWindow] = useState<LiveWindow>(autoWindow);
   const [period, setPeriod] = useState<HistPeriod>("All");
-
-  useEffect(() => {
-    api.stats().then(setStats).catch(() => {});
-  }, []);
+  const [selectedZone, setSelectedZone] = useState<string>("All Zones");
+  const [expandedTimeSlot, setExpandedTimeSlot] = useState<"morning" | "afternoon" | "night" | null>(null);
 
   // ── Live Analytics ────────────────────────────────────────────────────────
 
@@ -264,12 +272,24 @@ export default function AnalyticsPanel({ crimes, patrolZones, vehicles: _vehicle
     [crimes, minYear],
   );
 
+  // Zone-filtered crimes (applied on top of period filter)
+  const zoneFilteredCrimes = useMemo(() => {
+    const z = ZONE_FILTERS.find(f => f.label === selectedZone);
+    if (!z || z.keywords.length === 0) return filteredCrimes;
+    return filteredCrimes.filter(c =>
+      z.keywords.some(kw => c.police_station.toLowerCase().includes(kw)),
+    );
+  }, [filteredCrimes, selectedZone]);
+
+  // Reset time slot drill-down when any filter changes
+  useEffect(() => { setExpandedTimeSlot(null); }, [selectedZone, period]);
+
   const escalationData = useMemo(() => {
     const map: Record<string, { year: string; severe: number; moderate: number; low: number; projected: number }> = {};
     ["2022","2023","2024","2025","2026"].forEach(y => {
       map[y] = { year: y, severe: 0, moderate: 0, low: 0, projected: 0 };
     });
-    filteredCrimes.forEach(c => {
+    zoneFilteredCrimes.forEach(c => {
       const y = String(c.year);
       if (map[y]) map[y][c.severity]++;
     });
@@ -277,65 +297,98 @@ export default function AnalyticsPanel({ crimes, patrolZones, vehicles: _vehicle
     map["2026"].projected = Math.max(0, PROJECTED_2026_FULL - actual26);
     return Object.values(map).filter(row => row.severe + row.moderate + row.low + row.projected > 0)
       .sort((a, b) => Number(a.year) - Number(b.year));
-  }, [filteredCrimes]);
+  }, [zoneFilteredCrimes]);
 
   const crimeTypeByYear = useMemo(() => {
-    if (!stats) return [];
-    const years = escalationData.map(r => r.year);
+    const years = ["2022","2023","2024","2025","2026"];
     return years.map(yr => {
       const row: Record<string, string | number> = { year: yr };
-      Object.keys(stats.by_head_by_year).forEach(head => {
-        row[head] = stats.by_head_by_year[head]?.[yr] ?? 0;
+      const yearCrimes = zoneFilteredCrimes.filter(c => String(c.year) === yr);
+      yearCrimes.forEach(c => {
+        const key = normalizeHead(c.head);
+        row[key] = ((row[key] as number) ?? 0) + 1;
       });
       return row;
-    });
-  }, [stats, escalationData]);
+    }).filter(row => Object.keys(row).length > 1);
+  }, [zoneFilteredCrimes]);
 
   const stationData = useMemo(() => {
-    if (!stats) return [];
     const stationCounts: Record<string, number> = {};
-    filteredCrimes.forEach(c => {
+    zoneFilteredCrimes.forEach(c => {
       stationCounts[c.police_station] = (stationCounts[c.police_station] ?? 0) + 1;
     });
     return Object.entries(stationCounts)
       .map(([name, count]) => ({ name: shortStation(name), count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 8);
-  }, [filteredCrimes, stats]);
+  }, [zoneFilteredCrimes]);
 
   const timeSlotData = useMemo(() => {
-    const s = stats?.by_time_slot ?? { morning: 55, afternoon: 53, night: 112 };
-    const known = (s.morning || 0) + (s.afternoon || 0) + (s.night || 0);
-    return [
-      { slot: "Night",     count: s.night || 0,     pct: known ? Math.round(((s.night || 0) / known) * 100) : 51, color: "#6366f1" },
-      { slot: "Morning",   count: s.morning || 0,   pct: known ? Math.round(((s.morning || 0) / known) * 100) : 25, color: "#f59e0b" },
-      { slot: "Afternoon", count: s.afternoon || 0, pct: known ? Math.round(((s.afternoon || 0) / known) * 100) : 24, color: "#3b82f6" },
+    const morning   = zoneFilteredCrimes.filter(c => c.time_slot === "morning").length;
+    const afternoon = zoneFilteredCrimes.filter(c => c.time_slot === "afternoon").length;
+    const night     = zoneFilteredCrimes.filter(c => c.time_slot === "night").length;
+    const known = morning + afternoon + night;
+    if (known === 0) return [
+      { slot: "Night",     count: 0, pct: 51, color: "#6366f1", key: "night"     as const },
+      { slot: "Morning",   count: 0, pct: 25, color: "#f59e0b", key: "morning"   as const },
+      { slot: "Afternoon", count: 0, pct: 24, color: "#3b82f6", key: "afternoon" as const },
     ];
-  }, [stats]);
-  const unknownTimePct = stats
-    ? Math.round(((stats.by_time_slot.unknown ?? 335) / (crimes.length || 555)) * 100)
-    : 60;
+    return [
+      { slot: "Night",     count: night,     pct: Math.round(night / known * 100),     color: "#6366f1", key: "night"     as const },
+      { slot: "Morning",   count: morning,   pct: Math.round(morning / known * 100),   color: "#f59e0b", key: "morning"   as const },
+      { slot: "Afternoon", count: afternoon, pct: Math.round(afternoon / known * 100), color: "#3b82f6", key: "afternoon" as const },
+    ];
+  }, [zoneFilteredCrimes]);
 
-  const monthlyRateTrend = useMemo(() => {
-    if (!stats) return [];
-    const yearMonths: Record<string, number> = { "2022": 12, "2023": 12, "2024": 12, "2025": 12, "2026": 4 };
-    const rows = Object.entries(stats.by_year)
-      .filter(([y]) => Number(y) >= minYear || minYear === 0 ? Number(y) >= 2022 : Number(y) >= minYear)
-      .sort(([a], [b]) => Number(a) - Number(b))
-      .map(([year, total]) => ({
-        year,
-        rate: Math.round((total / (yearMonths[year] || 12)) * 10) / 10,
-        simulated: false,
-      }));
-    rows.push({ year: "May '26*", rate: SIM_MAY_2026, simulated: true });
-    return rows;
-  }, [stats, minYear]);
+  const unknownTimePct = useMemo(() => {
+    const noTime = zoneFilteredCrimes.filter(c => c.time_slot === null).length;
+    return zoneFilteredCrimes.length ? Math.round(noTime / zoneFilteredCrimes.length * 100) : 60;
+  }, [zoneFilteredCrimes]);
 
-  const avg2025 = useMemo(() => {
-    if (!stats) return 15.4;
-    const total2025 = stats.by_year[2025] ?? stats.by_year["2025" as unknown as number] ?? 185;
-    return Math.round((total2025 / 12) * 10) / 10;
-  }, [stats]);
+  // 2-hour breakdown for the clicked time slot
+  const SLOT_BINS = {
+    morning:   [{ label: "06–08", s: 6, e: 8 }, { label: "08–10", s: 8, e: 10 }, { label: "10–12", s: 10, e: 12 }],
+    afternoon: [{ label: "12–14", s: 12, e: 14 }, { label: "14–16", s: 14, e: 16 }, { label: "16–18", s: 16, e: 18 }],
+    night:     [{ label: "18–20", s: 18, e: 20 }, { label: "20–22", s: 20, e: 22 }, { label: "22–00", s: 22, e: 24 }, { label: "00–02", s: 0, e: 2 }, { label: "02–04", s: 2, e: 4 }, { label: "04–06", s: 4, e: 6 }],
+  };
+  const hourBreakdownData = useMemo(() => {
+    if (!expandedTimeSlot) return [];
+    return SLOT_BINS[expandedTimeSlot].map(({ label, s, e }) => ({
+      label,
+      count: zoneFilteredCrimes.filter(c => c.hour !== null && c.hour >= s && c.hour < e).length,
+    }));
+  }, [expandedTimeSlot, zoneFilteredCrimes]);
+
+  // Days-to-file histogram from date_of_occurrence → date_of_report
+  const daysToFileBins = useMemo(() => {
+    const BINS = [
+      { label: "0 days", min: 0, max: 1 },
+      { label: "1–3 d",  min: 1, max: 4 },
+      { label: "4–7 d",  min: 4, max: 8 },
+      { label: "8–14 d", min: 8, max: 15 },
+      { label: "15–30 d",min: 15, max: 31 },
+      { label: "31–90 d",min: 31, max: 91 },
+      { label: "90+ d",  min: 91, max: Infinity },
+    ];
+    const counts = BINS.map(() => 0);
+    let total = 0, sumDays = 0;
+    zoneFilteredCrimes.forEach(c => {
+      if (!c.date_of_occurrence || !c.date_of_report) return;
+      const diff = Math.max(0, Math.floor(
+        (new Date(c.date_of_report).getTime() - new Date(c.date_of_occurrence).getTime()) / 86400000,
+      ));
+      total++;
+      sumDays += diff;
+      const idx = BINS.findIndex(b => diff >= b.min && diff < b.max);
+      if (idx >= 0) counts[idx]++;
+    });
+    return {
+      bins: BINS.map((b, i) => ({ label: b.label, count: counts[i] })),
+      total,
+      avg: total > 0 ? Math.round(sumDays / total) : null,
+    };
+  }, [zoneFilteredCrimes]);
+
 
   const periodLabel = period === "All" ? "2022–2026" :
     period === "3y" ? "2023–2026" :
@@ -346,26 +399,37 @@ export default function AnalyticsPanel({ crimes, patrolZones, vehicles: _vehicle
   return (
     <div className="h-full flex flex-col bg-bg-dark">
       {/* ── Tab bar (sticky) ─────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-10 bg-bg-dark border-b border-border px-4 py-2.5 flex items-center gap-3 shrink-0">
-        <TabBtn label="Live Analytics" active={analyticsTab === "live"} onClick={() => setAnalyticsTab("live")} />
-        <TabBtn label="Historical Analytics" active={analyticsTab === "historical"} onClick={() => setAnalyticsTab("historical")} />
-        <div className="ml-auto flex items-center gap-1.5">
-          {analyticsTab === "live" && (
-            <>
-              <span className="text-[10px] text-text-muted mr-1">Window:</span>
-              {([2, 6, 10, 24] as const).map(w => (
-                <WindowBtn key={w} label={w === 24 ? "Full Day" : `${w}h`} active={liveWindow === w} onClick={() => setLiveWindow(w)} />
-              ))}
-            </>
-          )}
-          {analyticsTab === "historical" && (
-            <>
-              {(["1w","1m","6m","1y","3y","All"] as const).map(p => (
-                <WindowBtn key={p} label={p} active={period === p} onClick={() => setPeriod(p)} />
-              ))}
-            </>
-          )}
+      <div className="sticky top-0 z-10 bg-bg-dark border-b border-border shrink-0">
+        <div className="px-4 py-2.5 flex items-center gap-3">
+          <TabBtn label="Live Analytics" active={analyticsTab === "live"} onClick={() => setAnalyticsTab("live")} />
+          <TabBtn label="Historical Analytics" active={analyticsTab === "historical"} onClick={() => setAnalyticsTab("historical")} />
+          <div className="ml-auto flex items-center gap-1.5">
+            {analyticsTab === "live" && (
+              <>
+                <span className="text-[10px] text-text-muted mr-1">Window:</span>
+                {([2, 6, 10, 24] as const).map(w => (
+                  <WindowBtn key={w} label={w === 24 ? "Full Day" : `${w}h`} active={liveWindow === w} onClick={() => setLiveWindow(w)} />
+                ))}
+              </>
+            )}
+            {analyticsTab === "historical" && (
+              <>
+                <span className="text-[10px] text-text-muted mr-1">Period:</span>
+                {(["1w","1m","6m","1y","3y","All"] as const).map(p => (
+                  <WindowBtn key={p} label={p} active={period === p} onClick={() => setPeriod(p)} />
+                ))}
+              </>
+            )}
+          </div>
         </div>
+        {analyticsTab === "historical" && (
+          <div className="px-4 pb-2 flex items-center gap-1.5 flex-wrap">
+            <span className="text-[10px] text-text-muted mr-0.5">Zone:</span>
+            {ZONE_FILTERS.map(z => (
+              <WindowBtn key={z.label} label={z.label} active={selectedZone === z.label} onClick={() => setSelectedZone(z.label)} />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ── Content ──────────────────────────────────────────────────────── */}
@@ -498,13 +562,18 @@ export default function AnalyticsPanel({ crimes, patrolZones, vehicles: _vehicle
           {/* ══ HISTORICAL ANALYTICS TAB ══════════════════════════════════ */}
           {analyticsTab === "historical" && (
             <>
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <span className="text-[11px] font-semibold text-text-muted uppercase tracking-widest">
                   Historical Crime Data · {periodLabel}
                 </span>
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-surface-L2 border border-border text-text-muted">
-                  {filteredCrimes.length} crimes
+                  {zoneFilteredCrimes.length} crimes
                 </span>
+                {selectedZone !== "All Zones" && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/15 border border-blue-500/30 text-blue-300">
+                    {selectedZone}
+                  </span>
+                )}
               </div>
 
               {/* 2. The Escalation Story */}
@@ -544,12 +613,12 @@ export default function AnalyticsPanel({ crimes, patrolZones, vehicles: _vehicle
                 <ChartCard
                   title="Severity Breakdown"
                   icon={<Shield className="w-4 h-4 text-red-400" />}
-                  sub={`${filteredCrimes.length} cases · ${periodLabel}`}
+                  sub={`${zoneFilteredCrimes.length} cases · ${periodLabel}`}
                 >
                   {(() => {
-                    const severe   = filteredCrimes.filter(c => c.severity === "severe").length;
-                    const moderate = filteredCrimes.filter(c => c.severity === "moderate").length;
-                    const low      = filteredCrimes.filter(c => c.severity === "low").length;
+                    const severe   = zoneFilteredCrimes.filter(c => c.severity === "severe").length;
+                    const moderate = zoneFilteredCrimes.filter(c => c.severity === "moderate").length;
+                    const low      = zoneFilteredCrimes.filter(c => c.severity === "low").length;
                     const total    = severe + moderate + low || 1;
                     return (
                       <div className="flex items-center gap-4">
@@ -647,164 +716,103 @@ export default function AnalyticsPanel({ crimes, patrolZones, vehicles: _vehicle
                 </ResponsiveContainer>
               </ChartCard>
 
-              {/* 5. Time of day + Data quality */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <ChartCard
-                  title="When Crimes Happen"
-                  icon={<Clock className="w-4 h-4 text-indigo-400" />}
-                  sub="Based on 220 cases with a recorded time-of-occurrence (40% of total)."
-                >
-                  <div className="space-y-3 mb-1">
-                    {timeSlotData.map(({ slot, count, pct, color }) => (
-                      <div key={slot}>
-                        <div className="flex justify-between text-[11px] mb-1">
-                          <span className="text-text-secondary">{slot}</span>
-                          <span className="font-bold" style={{ color }}>{pct}% · {count} cases</span>
-                        </div>
-                        <div className="h-2 bg-surface-L2 rounded-full overflow-hidden">
-                          <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <Insight
-                    text="Half of crimes occur at night (18:00–06:00). SSF patrols should reinforce the 18:00–06:00 window, especially in Vandalur and Semmenchery."
-                    color="red"
-                  />
-                </ChartCard>
-
-                <ChartCard
-                  title="Incomplete Case Records"
-                  icon={<AlertTriangle className="w-4 h-4 text-amber-400" />}
-                  sub="60% of FIRs are missing the time of incident — this limits SSF's ability to schedule patrols when crimes actually happen."
-                >
-                  <div className="flex flex-col items-center justify-center py-3 gap-2">
-                    <div className="text-5xl font-black text-amber-400">{unknownTimePct}%</div>
-                    <p className="text-center text-[12px] text-text-secondary font-semibold">
-                      of FIRs have no time of incident recorded
-                    </p>
-                    <p className="text-center text-[10px] text-text-muted max-w-[220px] leading-relaxed">
-                      Out of 555 cases, 335 were filed without a time. Common causes: delayed reporting, reluctance to disclose, and incomplete station documentation.
-                    </p>
-                  </div>
-                  <Insight
-                    text="POCSO Sec. 19 requires anyone with knowledge of an offence to report it immediately. SSF's presence in communities is designed to make timely reporting safer."
-                    color="amber"
-                  />
-                </ChartCard>
-              </div>
-
-              {/* 6. Monthly Crime Rate */}
+              {/* 5. When Crimes Happen — clickable drill-down */}
               <ChartCard
-                title={`Monthly Crime Rate — ${periodLabel}`}
-                icon={<Zap className="w-4 h-4 text-yellow-400" />}
-                badge={
-                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">
-                    +33% vs 2025
-                  </span>
-                }
-                sub={`Annualised average crimes/month: 2025 avg ${avg2025}, 2026 avg 20.5 (Jan–Apr), May 2026 (*) simulated. Full-year projection: ${PROJECTED_2026_FULL} crimes.`}
+                title="When Crimes Happen"
+                icon={<Clock className="w-4 h-4 text-indigo-400" />}
+                sub={`Based on ${timeSlotData.reduce((s, d) => s + d.count, 0)} cases with a recorded time-of-occurrence. Click a slot to see 2-hour breakdown.`}
               >
-                <ResponsiveContainer width="100%" height={180}>
-                  <LineChart data={monthlyRateTrend} margin={{ top: 5, right: 20, left: -15, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
-                    <XAxis dataKey="year" tick={{ ...AXIS_TICK, fontSize: 9 }} />
-                    <YAxis tick={AXIS_TICK} domain={[0, 30]} />
-                    <Tooltip contentStyle={TT_STYLE} formatter={(v) => [`${v} crimes/month`, "Avg rate"]} />
-                    <ReferenceLine
-                      y={avg2025}
-                      stroke="#475569"
-                      strokeDasharray="4 2"
-                      label={{ value: `2025: ${avg2025}/mo`, fill: "#64748b", fontSize: 9, position: "right" }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="rate"
-                      stroke="#3b82f6"
-                      strokeWidth={2}
-                      dot={(props) => {
-                        const { cx, cy, payload } = props;
-                        const isSim = payload.simulated;
-                        return (
-                          <circle
-                            key={`dot-${cx}-${cy}`}
-                            cx={cx} cy={cy} r={isSim ? 5 : 3}
-                            fill={isSim ? "#f59e0b" : "#3b82f6"}
-                            stroke={isSim ? "#fbbf24" : "#3b82f6"}
-                            strokeWidth={isSim ? 2 : 0}
-                          />
-                        );
-                      }}
-                      name="Avg crimes/month"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
+                <div className="space-y-2 mb-1">
+                  {timeSlotData.map(({ slot, count, pct, color, key }) => {
+                    const isExpanded = expandedTimeSlot === key;
+                    return (
+                      <div key={slot}>
+                        <button
+                          className="w-full text-left group"
+                          onClick={() => setExpandedTimeSlot(isExpanded ? null : key)}
+                        >
+                          <div className="flex justify-between text-[11px] mb-1">
+                            <span className="text-text-secondary group-hover:text-text-primary transition flex items-center gap-1.5">
+                              {slot}
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded border transition ${
+                                isExpanded
+                                  ? "bg-indigo-500/20 border-indigo-500/40 text-indigo-300"
+                                  : "bg-surface-L2 border-border text-text-muted"
+                              }`}>
+                                {isExpanded ? "▲ collapse" : "▼ expand"}
+                              </span>
+                            </span>
+                            <span className="font-bold" style={{ color }}>{pct}% · {count} cases</span>
+                          </div>
+                          <div className="h-2 bg-surface-L2 rounded-full overflow-hidden">
+                            <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
+                          </div>
+                        </button>
+                        {isExpanded && hourBreakdownData.length > 0 && (
+                          <div className="mt-2 pl-2 border-l-2 border-dashed" style={{ borderColor: color + "60" }}>
+                            <p className="text-[9px] text-text-muted mb-1.5 uppercase tracking-widest">2-hour breakdown</p>
+                            <ResponsiveContainer width="100%" height={90}>
+                              <BarChart data={hourBreakdownData} margin={{ top: 0, right: 5, left: -20, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} vertical={false} />
+                                <XAxis dataKey="label" tick={{ ...AXIS_TICK, fontSize: 9 }} />
+                                <YAxis tick={AXIS_TICK} allowDecimals={false} />
+                                <Tooltip contentStyle={TT_STYLE} formatter={(v) => [v, "cases"]} />
+                                <Bar dataKey="count" fill={color} radius={[2, 2, 0, 0]}>
+                                  <LabelList dataKey="count" position="top" style={{ fill: "#94a3b8", fontSize: 9 }} />
+                                </Bar>
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <Insight
+                  text="Half of crimes occur at night (18:00–06:00). SSF patrols should reinforce the 18:00–06:00 window, especially in Vandalur and Semmenchery."
+                  color="red"
+                />
               </ChartCard>
 
-              {/* 7. SSF Patrol Zone Summary */}
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <Navigation className="w-3.5 h-3.5 text-text-muted" />
-                  <span className="text-[11px] font-semibold text-text-muted uppercase tracking-widest">
-                    SSF Patrol Zone Summary
-                  </span>
-                </div>
-                <p className="text-[10px] text-text-muted mb-3 leading-relaxed">
-                  Each zone shows its risk score (150+ high · 80–150 medium · &lt;80 low), the time of day when crimes peak (highlighted pill = patrol priority window), and the top crime location to watch.
-                </p>
-                {patrolZones.length === 0 ? (
-                  <p className="text-[11px] text-text-muted text-center py-4">Loading zone data…</p>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {patrolZones.map((zone) => {
-                      const riskColor =
-                        zone.risk_score > 150 ? "#dc2626" :
-                        zone.risk_score > 80  ? "#f59e0b" : "#22c55e";
-                      const ts = zone.time_slot_risks;
-                      const slots: Array<"morning" | "afternoon" | "night"> = ["morning","afternoon","night"];
-                      const slotLabels: Record<string, string> = { morning: "Morning 6–12", afternoon: "Afternoon 12–18", night: "Night 18–6" };
-                      const dominantSlot = [...slots].sort((a, b) => (ts[b] || 0) - (ts[a] || 0))[0];
-                      return (
-                        <div key={zone.zone_id} className="bg-surface-L1 rounded-xl border border-border p-4">
-                          <div className="flex items-start justify-between mb-2">
-                            <div>
-                              <p className="text-sm font-bold text-text-primary">Zone {zone.zone_id + 1}</p>
-                              <p className="text-[10px] text-text-muted">
-                                {zone.crime_count} crimes · recency {Math.round(zone.recency_score * 100)}%
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-2xl font-black leading-none" style={{ color: riskColor }}>
-                                {Math.round(zone.risk_score)}
-                              </p>
-                              <p className="text-[9px] text-text-muted">risk score</p>
-                            </div>
-                          </div>
-                          <div className="flex gap-1.5 mb-2 flex-wrap">
-                            {(["morning","afternoon","night"] as const).map(slot => (
-                              <span
-                                key={slot}
-                                className={`text-[9px] font-semibold px-2 py-0.5 rounded-full border ${
-                                  dominantSlot === slot
-                                    ? "bg-indigo-500/20 border-indigo-500/30 text-indigo-300"
-                                    : "bg-surface-L2 border-border text-text-muted"
-                                }`}
-                              >
-                                {slotLabels[slot]} {Math.round((ts[slot] || 0) * 100)}%
-                              </span>
-                            ))}
-                          </div>
-                          {zone.top_spots[0] && (
-                            <p className="text-[10px] text-text-secondary truncate">
-                              Top spot: <span className="text-text-primary font-medium">{zone.top_spots[0].place}</span>
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })}
+              {/* 6. Incomplete Case Records — days-to-file histogram */}
+              <ChartCard
+                title="Incomplete Case Records — Days to File FIR"
+                icon={<AlertTriangle className="w-4 h-4 text-amber-400" />}
+                badge={
+                  daysToFileBins.avg !== null
+                    ? <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        Avg {daysToFileBins.avg} days
+                      </span>
+                    : undefined
+                }
+                sub={`${unknownTimePct}% of FIRs missing time of incident. Of the ${daysToFileBins.total} cases with both incident date and report date, distribution of delay is shown below.`}
+              >
+                {daysToFileBins.total === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-4 gap-2">
+                    <div className="text-5xl font-black text-amber-400">{unknownTimePct}%</div>
+                    <p className="text-[12px] text-text-secondary font-semibold text-center">of FIRs have no time of incident recorded</p>
                   </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={160}>
+                    <BarChart data={daysToFileBins.bins} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} vertical={false} />
+                      <XAxis dataKey="label" tick={{ ...AXIS_TICK, fontSize: 9 }} />
+                      <YAxis tick={AXIS_TICK} allowDecimals={false} />
+                      <Tooltip contentStyle={TT_STYLE} formatter={(v) => [v, "cases"]} />
+                      <Bar dataKey="count" radius={[3, 3, 0, 0]}>
+                        {daysToFileBins.bins.map(({ label }) => (
+                          <Cell key={label} fill={label === "0 days" ? "#22c55e" : label === "90+ d" ? "#dc2626" : "#f59e0b"} />
+                        ))}
+                        <LabelList dataKey="count" position="top" style={{ fill: "#94a3b8", fontSize: 9 }} />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
                 )}
-              </div>
+                <Insight
+                  text="POCSO Sec. 19 requires immediate reporting. Delayed filings (90+ days) indicate reluctance, fear, or incomplete station documentation. SSF community presence is designed to reduce this gap."
+                  color="amber"
+                />
+              </ChartCard>
             </>
           )}
 

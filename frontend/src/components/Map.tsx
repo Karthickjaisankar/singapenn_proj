@@ -107,7 +107,7 @@ function vehicleColor(id: number): string {
   return VEHICLE_COLORS[id] ?? "#ec4899";
 }
 
-function createVehicleIcon(id: number, status: string): L.DivIcon {
+function createVehicleIcon(id: number, status: string, isMe = false): L.DivIcon {
   const color = vehicleColor(id);
   const responding = status === "responding";
   const gradId = `vg${id}`;
@@ -134,14 +134,26 @@ function createVehicleIcon(id: number, status: string): L.DivIcon {
   const outerStyle = responding
     ? `width:54px;height:54px;border-radius:10px;display:flex;align-items:center;justify-content:center;animation:vehicle-dispatch-pulse 1.2s ease-in-out infinite;`
     : `width:54px;height:54px;border-radius:10px;display:flex;align-items:center;justify-content:center;`;
-  const innerStyle = `width:46px;height:46px;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,0.9);border:2.5px solid ${color};border-radius:8px;box-shadow:0 4px 14px ${color}55`;
-  // Siren: two alternating red/blue dots at top-center of the icon
-  const sirenHtml = `<style>@keyframes sr{0%,49%{opacity:1}50%,100%{opacity:0}}@keyframes sb{0%,49%{opacity:0}50%,100%{opacity:1}}</style><div style="position:absolute;top:1px;left:50%;transform:translateX(-50%);display:flex;gap:3px;z-index:2;"><div style="width:5px;height:5px;border-radius:50%;background:#ef4444;box-shadow:0 0 5px #ef4444;animation:sr 0.8s step-end infinite;"></div><div style="width:5px;height:5px;border-radius:50%;background:#3b82f6;box-shadow:0 0 5px #3b82f6;animation:sb 0.8s step-end infinite;"></div></div>`;
+  const innerStyle = `width:46px;height:46px;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,0.9);border:2.5px solid ${color}${isMe ? ";box-shadow:0 0 0 3px " + color + "88,0 4px 14px " + color + "55" : ";box-shadow:0 4px 14px " + color + "55"};border-radius:8px;`;
+  // Siren: pulsing red glow + alternating red/blue dots
+  const sirenHtml = `
+    <style>
+      @keyframes sr{0%,49%{opacity:1;box-shadow:0 0 10px 4px #ef4444,0 0 20px 6px rgba(239,68,68,0.6)}50%,100%{opacity:0.15;box-shadow:none}}
+      @keyframes sb{0%,49%{opacity:0.15;box-shadow:none}50%,100%{opacity:1;box-shadow:0 0 10px 4px #3b82f6,0 0 20px 6px rgba(59,130,246,0.6)}}
+      @keyframes siren-glow{0%,49%{box-shadow:0 0 14px 6px rgba(239,68,68,0.55)}50%,100%{box-shadow:0 0 14px 6px rgba(59,130,246,0.55)}}
+    </style>
+    <div style="position:absolute;top:-2px;left:50%;transform:translateX(-50%);display:flex;gap:4px;z-index:2;animation:siren-glow 0.8s step-end infinite;padding:2px 4px;border-radius:6px;background:rgba(0,0,0,0.55);">
+      <div style="width:7px;height:7px;border-radius:50%;background:#ef4444;animation:sr 0.8s step-end infinite;"></div>
+      <div style="width:7px;height:7px;border-radius:50%;background:#3b82f6;animation:sb 0.8s step-end infinite;"></div>
+    </div>`;
+  const youBadge = isMe
+    ? `<div style="position:absolute;top:-26px;left:50%;transform:translateX(-50%);background:white;color:#0f172a;font-size:9px;font-weight:900;padding:3px 9px;border-radius:5px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.6),0 0 0 2px ${color};letter-spacing:0.08em;">YOU ARE HERE</div>`
+    : "";
   return L.divIcon({
-    html: `<div style="${outerStyle};position:relative;">${sirenHtml}<div style="${innerStyle}">${svg}</div></div>`,
+    html: `<div style="${outerStyle};position:relative;">${youBadge}${sirenHtml}<div style="${innerStyle}">${svg}</div></div>`,
     className: "",
-    iconSize: [54, 54],
-    iconAnchor: [27, 27],
+    iconSize: [54, isMe ? 68 : 54],
+    iconAnchor: [27, isMe ? 42 : 27],
   });
 }
 
@@ -161,12 +173,13 @@ interface MapProps {
   venueZoomThreshold?: number;
   token?: string;
   navTarget?: { fromLat: number; fromLng: number; toLat: number; toLng: number; color: string } | null;
+  myVehicleId?: number;
 }
 
 export default function Map({
   crimes, hotspots, vehicles, venues, isLoading, activeAlerts, liveAlertLocations,
   selectedAlertId, onResetView, vehicleAssignments, onVehicleReached,
-  hideCrimes, venueZoomThreshold, token, navTarget,
+  hideCrimes, venueZoomThreshold, token, navTarget, myVehicleId,
 }: MapProps) {
   const mapEl  = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -610,8 +623,8 @@ export default function Map({
       };
 
       const mk = L.marker([synthetic[startIdx][0], synthetic[startIdx][1]], {
-        icon: createVehicleIcon(v.id, v.status),
-        zIndexOffset: 1000,
+        icon: createVehicleIcon(v.id, v.status, v.id === myVehicleId),
+        zIndexOffset: v.id === myVehicleId ? 1500 : 1000,
       });
       const officer = VEHICLE_OFFICERS[v.id] ?? { name: "Unknown", phone: "—" };
       mk.bindPopup(
@@ -654,14 +667,15 @@ export default function Map({
         .catch(() => {}); // keep synthetic on failure
     });
 
-    // Smooth lerp at 50ms, 0.8% per tick ≈ ~city speed on OSRM route
+    // Smooth lerp at 50ms — dispatched vehicles move ~7× faster for demo visibility
     animRef.current = window.setInterval(() => {
       vehicles.forEach(v => {
         const pos = vehiclePosRef.current[v.id];
         const mk  = vehicleMarkersRef.current[v.id];
         if (!pos || !mk || reachedRef.current.has(v.id)) return;
 
-        pos.t = Math.min(1, pos.t + 0.008);
+        const isDispatched = vehicleAssignmentsRef.current[v.id] !== undefined;
+        pos.t = Math.min(1, pos.t + (isDispatched ? 0.055 : 0.012));
         mk.setLatLng([
           pos.fromLat + (pos.toLat - pos.fromLat) * pos.t,
           pos.fromLng + (pos.toLng - pos.fromLng) * pos.t,
@@ -695,7 +709,7 @@ export default function Map({
       Object.values(vehicleMarkersRef.current).forEach(mk => { mapRef.current?.removeLayer(mk); });
       vehicleMarkersRef.current = {};
     };
-  }, [vehicles]);
+  }, [vehicles, myVehicleId]);
 
   // ── Effect 5: dispatch routing — dotted OSRM line + redirect vehicle ────────
   useEffect(() => {
@@ -796,10 +810,14 @@ export default function Map({
       fetch(osrmUrl)
         .then(r => r.json())
         .then(data => {
-          const coords: [number, number][] = (
+          const raw: [number, number][] = (
             data.routes?.[0]?.geometry?.coordinates ?? []
           ).map(([ln, la]: number[]) => [la, ln] as [number, number]);
-          if (coords.length < 2) throw new Error("short");
+          if (raw.length < 2) throw new Error("short");
+          // Subsample to ≤14 waypoints so dispatch completes in ~10-12 s at demo speed
+          const step = Math.max(1, Math.floor(raw.length / 13));
+          const coords: [number, number][] = raw.filter((_, i) => i % step === 0);
+          if (coords[coords.length - 1] !== raw[raw.length - 1]) coords.push(raw[raw.length - 1]);
           doRoute(coords);
         })
         .catch(() => {

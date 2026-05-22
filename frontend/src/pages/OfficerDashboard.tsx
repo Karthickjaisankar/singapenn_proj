@@ -648,6 +648,11 @@ function ComplaintsFeed({
             .find(vid => vehicleAssignments[vid] === alert.id)) ?? null;
           const rowReached = rowDispVid !== null && reachedVehicleIds.has(rowDispVid);
 
+          const isPending = alert.status === "pending" && rowDispVid === null;
+          const glowClass = isPending
+            ? (sev === "severe" ? "glow-red" : sev === "moderate" ? "glow-amber" : "")
+            : "";
+
           return (
             <div key={alert.id}>
               {/* Row button */}
@@ -655,13 +660,10 @@ function ComplaintsFeed({
                 onClick={() => onSelect(isSelected ? null : alert.id)}
                 className={`w-full text-left px-3 py-2.5 transition flex items-start gap-0 ${
                   isSelected ? "bg-surface-L2" : "hover:bg-surface-L2/60"
-                }`}
+                } ${glowClass}`}
                 style={{
                   borderLeft: `3px solid ${color}`,
                   borderBottom: isSelected ? "none" : "1px solid rgba(255,255,255,0.06)",
-                  boxShadow: isSelected
-                    ? `inset 0 0 0 1px ${color}30, 0 0 12px ${color}18`
-                    : `inset 0 0 0 1px ${color}10`,
                 }}
               >
                 <div className="min-w-0 flex-1 pl-2.5">
