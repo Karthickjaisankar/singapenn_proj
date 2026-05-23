@@ -208,7 +208,7 @@ export default function Map({
   const [showVenues, setShowVenues]   = useState(true);
   const [showAlerts, setShowAlerts]   = useState(true);
   const [showHeatmap, setShowHeatmap] = useState(false);
-  const [showTrails, setShowTrails]   = useState(false);
+  const showTrails = false; // Patrol trails moved to dedicated tab in OfficerDashboard
   const trailLayersRef = useRef<Record<number, L.Polyline>>({});
   const navLineRef = useRef<L.Polyline | null>(null);
 
@@ -580,21 +580,33 @@ export default function Map({
     // Pan gently to the pin — do NOT zoom in past current level
     mapRef.current.panTo([lat, lng], { animate: true, duration: 0.6 });
 
-    // "I'm here" pulsing pin
+    // Severity-coloured pin
+    const t = alert.alert_type.toLowerCase();
+    const isSevere = ["sos","assault","rape","molestation","abduction","kidnap","pocso"].some(k => t.includes(k));
+    const isMod    = ["harassment","stalking","threat"].some(k => t.includes(k));
+    const pinColor = isSevere ? "#ef4444" : isMod ? "#f59e0b" : "#22c55e";
+    const pinRgb   = isSevere ? "239,68,68" : isMod ? "245,158,11" : "34,197,94";
+
+    // "I'm here" — three-ring pulsing pin, much more intense
     const pin = L.divIcon({
       className: "",
-      html: `<div class="iam-here-outer" style="
-        width:52px;height:52px;border-radius:50%;
-        display:flex;align-items:center;justify-content:center;
-        background:rgba(239,68,68,0.12);">
-        <div style="
-          width:22px;height:22px;border-radius:50%;
-          background:#ef4444;border:3px solid white;
-          box-shadow:0 0 14px rgba(239,68,68,0.9);">
-        </div>
+      html: `<div style="position:relative;width:80px;height:80px;display:flex;align-items:center;justify-content:center;">
+        <div style="position:absolute;width:80px;height:80px;border-radius:50%;
+          background:rgba(${pinRgb},0.08);border:2px solid rgba(${pinRgb},0.30);
+          animation:alert-ring 1.4s ease-out infinite;"></div>
+        <div style="position:absolute;width:54px;height:54px;border-radius:50%;
+          background:rgba(${pinRgb},0.18);border:2.5px solid rgba(${pinRgb},0.60);
+          animation:alert-ring 1.4s ease-out 0.45s infinite;"></div>
+        <div style="position:absolute;width:32px;height:32px;border-radius:50%;
+          background:rgba(${pinRgb},0.30);border:3px solid rgba(${pinRgb},0.85);
+          animation:alert-ring 1.4s ease-out 0.9s infinite;"></div>
+        <div style="position:relative;width:22px;height:22px;border-radius:50%;
+          background:${pinColor};border:3px solid #fff;
+          box-shadow:0 0 20px ${pinColor},0 0 40px rgba(${pinRgb},0.6),0 2px 8px rgba(0,0,0,0.5);
+          z-index:1;"></div>
       </div>`,
-      iconSize: [52, 52],
-      iconAnchor: [26, 26],
+      iconSize: [80, 80],
+      iconAnchor: [40, 40],
     });
 
     iAmHereRef.current = L.marker([lat, lng], { icon: pin, zIndexOffset: 2000 })
@@ -928,7 +940,6 @@ export default function Map({
               { label: "Heatmap", value: showHeatmap, set: setShowHeatmap, onlyInCrimes: true },
               { label: `Venues (zoom ${venueZoomThresholdRef.current}+)`, value: showVenues,  set: setShowVenues,  onlyInCrimes: false },
               { label: "Alerts",  value: showAlerts,  set: setShowAlerts,  onlyInCrimes: false },
-              { label: "Patrol Trails", value: showTrails, set: setShowTrails, onlyInCrimes: false },
             ] as const).map(({ label, value, set, onlyInCrimes }) => (
               (!onlyInCrimes || mode === "crimes") && (
                 <label key={label} className="flex items-center gap-2 cursor-pointer text-xs text-text-secondary hover:text-text-primary transition">
@@ -1003,20 +1014,6 @@ export default function Map({
             <span className="text-[11px] text-text-secondary">SOS Alert</span>
           </div>
         </div>
-
-        {showTrails && (
-          <div className="mt-2 pt-2 border-t border-border">
-            <p className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1.5">Patrol Trails</p>
-            <div className="space-y-1">
-              {([1, 2, 3, 4] as const).map(id => (
-                <div key={id} className="flex items-center gap-2">
-                  <div className="w-7 h-1.5 rounded-full shrink-0" style={{ background: vehicleColor(id), opacity: 0.7 }} />
-                  <span className="text-[11px] text-text-secondary">Patrol {id} today</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {showVenues && (
           <div className="mt-2 pt-2 border-t border-border">

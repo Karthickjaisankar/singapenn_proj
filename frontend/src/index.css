@@ -158,17 +158,28 @@ body,
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.2);
 }
 
-/* ── Complaint urgency glow borders ─────────────────────────────────────── */
+/* ── Complaint urgency glow borders — heartbeat lub-dub pattern ─────────── */
 @keyframes glow-red {
-  0%, 100% { box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.5),  0 0 10px 2px rgba(239, 68, 68, 0.15); }
-  50%       { box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.9),  0 0 22px 6px rgba(239, 68, 68, 0.45); }
+  0%, 50%, 100% { box-shadow: 0 0 0 0px rgba(239,68,68,0.08); }
+  14%  { box-shadow: 0 0 0 5px rgba(239,68,68,0.95), 0 0 28px 10px rgba(239,68,68,0.55); }
+  26%  { box-shadow: 0 0 0 1px rgba(239,68,68,0.20), 0 0  8px  2px rgba(239,68,68,0.12); }
+  38%  { box-shadow: 0 0 0 3px rgba(239,68,68,0.75), 0 0 18px  6px rgba(239,68,68,0.40); }
 }
 @keyframes glow-amber {
-  0%, 100% { box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.5),  0 0 10px 2px rgba(245, 158, 11, 0.15); }
-  50%       { box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.9),  0 0 22px 6px rgba(245, 158, 11, 0.45); }
+  0%, 50%, 100% { box-shadow: 0 0 0 0px rgba(245,158,11,0.08); }
+  14%  { box-shadow: 0 0 0 5px rgba(245,158,11,0.95), 0 0 28px 10px rgba(245,158,11,0.55); }
+  26%  { box-shadow: 0 0 0 1px rgba(245,158,11,0.20), 0 0  8px  2px rgba(245,158,11,0.12); }
+  38%  { box-shadow: 0 0 0 3px rgba(245,158,11,0.75), 0 0 18px  6px rgba(245,158,11,0.40); }
 }
-.glow-red   { animation: glow-red   1.6s ease-in-out infinite; border-color: rgba(239, 68, 68, 0.6) !important; }
-.glow-amber { animation: glow-amber 1.6s ease-in-out infinite; border-color: rgba(245, 158, 11, 0.6) !important; }
+@keyframes glow-green {
+  0%, 50%, 100% { box-shadow: 0 0 0 0px rgba(34,197,94,0.08); }
+  14%  { box-shadow: 0 0 0 5px rgba(34,197,94,0.95), 0 0 28px 10px rgba(34,197,94,0.55); }
+  26%  { box-shadow: 0 0 0 1px rgba(34,197,94,0.20), 0 0  8px  2px rgba(34,197,94,0.12); }
+  38%  { box-shadow: 0 0 0 3px rgba(34,197,94,0.75), 0 0 18px  6px rgba(34,197,94,0.40); }
+}
+.glow-red   { animation: glow-red   2s ease-in-out infinite; border-color: rgba(239, 68, 68, 0.7) !important; }
+.glow-amber { animation: glow-amber 2s ease-in-out infinite; border-color: rgba(245,158, 11, 0.7) !important; }
+.glow-green { animation: glow-green 2s ease-in-out infinite; border-color: rgba( 34,197, 94, 0.7) !important; }
 
 /* ── Patrol idle event marker pulse ─────────────────────────────────────── */
 @keyframes idle-ring-pulse {

@@ -650,7 +650,7 @@ function ComplaintsFeed({
 
           const isPending = alert.status === "pending" && rowDispVid === null;
           const glowClass = isPending
-            ? (sev === "severe" ? "glow-red" : sev === "moderate" ? "glow-amber" : "")
+            ? (sev === "severe" ? "glow-red" : sev === "moderate" ? "glow-amber" : "glow-green")
             : "";
 
           return (

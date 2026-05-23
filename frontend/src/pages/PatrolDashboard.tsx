@@ -85,6 +85,17 @@ const PAST_COMPLAINTS: Record<number, {
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
+function patrolSeverity(alertType: string): "severe" | "moderate" | "low" {
+  const t = alertType.toLowerCase();
+  if (["sos","assault","rape","molestation","abduction","kidnap","pocso"].some(k => t.includes(k))) return "severe";
+  if (["harassment","stalking","threat","medical"].some(k => t.includes(k))) return "moderate";
+  return "low";
+}
+function patrolGlowClass(alertType: string): string {
+  const sev = patrolSeverity(alertType);
+  return sev === "severe" ? "glow-red" : sev === "moderate" ? "glow-amber" : "glow-green";
+}
+
 function parseUTC(iso: string): Date {
   return new Date(/Z|[+-]\d{2}:/.test(iso) ? iso : iso.replace(" ", "T") + "Z");
 }
@@ -413,7 +424,7 @@ export default function PatrolDashboard() {
                     const ageMin = Math.round((Date.now() - new Date(c.created_at).getTime()) / 60000);
                     return (
                       <div key={c.id} className={`rounded-xl border transition-all ${
-                        isExpanded ? "border-amber-500/40 bg-amber-500/5" : `border-border bg-surface-L2 ${!isRejectOpen ? "glow-red" : ""}`
+                        isExpanded ? "border-amber-500/40 bg-amber-500/5" : `border-border bg-surface-L2 ${!isRejectOpen ? patrolGlowClass(c.alert_type) : ""}`
                       }`}>
                         {/* Collapsed row */}
                         <button
