@@ -606,7 +606,10 @@ function ComplaintsFeed({
   reachedVehicleIds: Set<number>;
   onResolve: (alertId: number) => void;
 }) {
-  const sorted = [...alerts].sort((a, b) => b.id - a.id);
+  const [hideResolved, setHideResolved] = useState(true);
+  const sorted = [...alerts]
+    .filter(a => !hideResolved || !["resolved", "cancelled"].includes(a.status))
+    .sort((a, b) => b.id - a.id);
 
   return (
     <div className="h-full flex flex-col bg-surface-L1 border-l border-border">
@@ -623,7 +626,17 @@ function ComplaintsFeed({
               {alerts.filter(a => a.status === "pending").length} pending
             </span>
           )}
-          <span className="text-[10px] text-text-muted tabular-nums">{alerts.length} total</span>
+          <button
+            onClick={() => setHideResolved(h => !h)}
+            className={`text-[10px] font-bold px-2 py-0.5 rounded-full border transition ${
+              hideResolved
+                ? "bg-green-500/15 text-green-400 border-green-500/30"
+                : "bg-surface-L2 text-text-muted border-border"
+            }`}
+          >
+            {hideResolved ? "Active only" : "All"}
+          </button>
+          <span className="text-[10px] text-text-muted tabular-nums">{sorted.length} shown</span>
         </div>
       </div>
 
