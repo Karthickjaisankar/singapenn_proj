@@ -35,6 +35,7 @@ from backend.database import (
     get_stationary_alerts, get_shift_km,
     create_incident_report, get_incident_report, get_all_reports, escalate_report,
     register_fop, get_fop_volunteers, verify_fop, get_fop_by_user,
+    reseed_demo_alerts,
 )
 from backend.domain import MANDATORY_FIR_HEADS, PATROL_STATIONARY_THRESHOLD_MINUTES
 
@@ -1178,6 +1179,7 @@ if os.getenv("DEMO_MODE") == "1":
         conn.execute("DELETE FROM alerts")
         conn.commit()
         conn.close()
+        reseed_demo_alerts()  # restore the 12 baseline complaints
         _DEMO["alert_id"] = None
         # Return PPV-1 to patrolling
         with _LOCK:
