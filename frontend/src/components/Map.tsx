@@ -205,9 +205,17 @@ export default function Map({
   const venueZoomThresholdRef = useRef(venueZoomThreshold ?? 14);
 
   const [mode, setMode]             = useState<MapMode>("crimes");
-  const [showVenues, setShowVenues]   = useState(true);
-  const [showAlerts, setShowAlerts]   = useState(true);
-  const [showHeatmap, setShowHeatmap] = useState(false);
+  const [showVenues, setShowVenues]         = useState(true);
+  const [hiddenVenueTypes, setHiddenVenueTypes] = useState<Set<string>>(new Set());
+  const [showAlerts, setShowAlerts]         = useState(true);
+  const [showHeatmap, setShowHeatmap]       = useState(false);
+
+  const toggleVenueType = (type: string) =>
+    setHiddenVenueTypes(prev => {
+      const next = new Set(prev);
+      if (next.has(type)) next.delete(type); else next.add(type);
+      return next;
+    });
   const showTrails = false; // Patrol trails moved to dedicated tab in OfficerDashboard
   const trailLayersRef = useRef<Record<number, L.Polyline>>({});
   const navLineRef = useRef<L.Polyline | null>(null);
@@ -446,7 +454,7 @@ export default function Map({
     if (venueLayerRef.current) { venueLayerRef.current.remove(); venueLayerRef.current = null; }
     if (venues.length > 0) {
       const venueGroup = L.layerGroup();
-      venues.forEach(v => {
+      venues.filter(v => !hiddenVenueTypes.has(v.type)).forEach(v => {
         const ve = getVenueEmoji(v.type);
         const icon = L.divIcon({
           html: `<div style="width:22px;height:22px;background:#fff;border:1.5px solid ${ve.color};border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;box-shadow:0 1px 4px rgba(0,0,0,0.18);line-height:1">${ve.emoji}</div>`,
@@ -524,7 +532,7 @@ export default function Map({
       alertGroup.addTo(m);
       layerRefsRef.current.alerts = alertGroup;
     }
-  }, [crimes, hotspots, venues, mode, showVenues, showAlerts, showHeatmap, activeAlerts, liveAlertLocations, hideCrimes]);
+  }, [crimes, hotspots, venues, mode, showVenues, hiddenVenueTypes, showAlerts, showHeatmap, activeAlerts, liveAlertLocations, hideCrimes]);
 
   // ── Effect: Patrol trails (spaghetti view) ────────────────────────────────
   useEffect(() => {
@@ -936,23 +944,51 @@ export default function Map({
           </div>
 
           <div className="absolute top-14 left-3 z-[1000] bg-surface-L2/90 backdrop-blur-md border border-border rounded-xl px-3 py-2.5 shadow-lg space-y-1.5">
-            {([
-              { label: "Heatmap", value: showHeatmap, set: setShowHeatmap, onlyInCrimes: true },
-              { label: `Venues (zoom ${venueZoomThresholdRef.current}+)`, value: showVenues,  set: setShowVenues,  onlyInCrimes: false },
-              { label: "Alerts",  value: showAlerts,  set: setShowAlerts,  onlyInCrimes: false },
-            ] as const).map(({ label, value, set, onlyInCrimes }) => (
-              (!onlyInCrimes || mode === "crimes") && (
-                <label key={label} className="flex items-center gap-2 cursor-pointer text-xs text-text-secondary hover:text-text-primary transition">
-                  <input
-                    type="checkbox"
-                    checked={value}
-                    onChange={e => (set as (v: boolean) => void)(e.target.checked)}
-                    className="w-3 h-3 accent-blue-400"
-                  />
-                  <span>{label}</span>
-                </label>
-              )
-            ))}
+            {/* Heatmap — crime view only */}
+            {mode === "crimes" && (
+              <label className="flex items-center gap-2 cursor-pointer text-xs text-text-secondary hover:text-text-primary transition">
+                <input type="checkbox" checked={showHeatmap} onChange={e => setShowHeatmap(e.target.checked)} className="w-3 h-3 accent-blue-400" />
+                <span>Heatmap</span>
+              </label>
+            )}
+
+            {/* Venues + per-type sub-filter */}
+            <div className="space-y-1">
+              <label className="flex items-center gap-2 cursor-pointer text-xs text-text-secondary hover:text-text-primary transition">
+                <input type="checkbox" checked={showVenues} onChange={e => setShowVenues(e.target.checked)} className="w-3 h-3 accent-blue-400" />
+                <span>Venues (zoom {venueZoomThresholdRef.current}+)</span>
+              </label>
+              {showVenues && (
+                <div className="flex flex-wrap gap-1 pl-5 pt-0.5">
+                  {Object.entries(VENUE_EMOJI).map(([type, { emoji, color, label }]) => {
+                    const hidden = hiddenVenueTypes.has(type);
+                    return (
+                      <button
+                        key={type}
+                        onClick={() => toggleVenueType(type)}
+                        title={hidden ? `Show ${label}` : `Hide ${label}`}
+                        style={{
+                          width: 22, height: 22, borderRadius: "50%", cursor: "pointer",
+                          border: `1.5px solid ${hidden ? "rgba(148,163,184,0.25)" : color}`,
+                          background: hidden ? "rgba(148,163,184,0.08)" : `${color}25`,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: 11, opacity: hidden ? 0.35 : 1,
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        {emoji}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Alerts */}
+            <label className="flex items-center gap-2 cursor-pointer text-xs text-text-secondary hover:text-text-primary transition">
+              <input type="checkbox" checked={showAlerts} onChange={e => setShowAlerts(e.target.checked)} className="w-3 h-3 accent-blue-400" />
+              <span>Alerts</span>
+            </label>
           </div>
         </>
       )}
