@@ -365,6 +365,7 @@ export default function PatrolDashboard() {
             navTarget={navTarget}
             token={user?.token}
             myVehicleId={vehicleId}
+            venueZoomThreshold={12}
           />
 
           {/* Navigate to Victim button — overlaid on map */}
