@@ -131,7 +131,7 @@ export interface PatrolTrackPoint {
 }
 
 export interface WSMessage {
-  type: "connected" | "initial_state" | "alert_created" | "alert_updated" | "location_update" | "pong";
+  type: "connected" | "initial_state" | "alert_created" | "alert_updated" | "location_update" | "pong" | "demo_reset";
   alert?: AlertRow;
   alerts?: AlertRow[];
   alert_id?: number;

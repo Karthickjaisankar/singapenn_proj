@@ -115,11 +115,13 @@ export default function PatrolDashboard() {
   const { user, logout } = useAuth();
   const vehicleId = user?.vehicle_id ?? 0;
   const color = VEHICLE_COLORS[vehicleId] ?? "#3b82f6";
-  const { myAlert: realMyAlert, alertQueue: realQueue, connected } = usePatrolAlerts(user?.token ?? "", vehicleId);
+  const { myAlert: realMyAlert, alertQueue: realQueue, connected, resetKey } = usePatrolAlerts(user?.token ?? "", vehicleId);
   // Demo active alert: simulates accepted state for negative-ID demo items
   const [demoActive, setDemoActive] = useState<any | null>(null);
-  // Real alert always wins over demo
-  const myAlert = realMyAlert ?? demoActive;
+  // Local dismiss: lets operator close the active complaint view without changing DB
+  const [localDismissed, setLocalDismissed] = useState(false);
+  // Real alert always wins over demo; respect local dismiss
+  const myAlert = localDismissed ? null : (realMyAlert ?? demoActive);
   // Use real queue if populated, otherwise show demo data (minus any accepted demo item)
   const alertQueue = realQueue.length > 0
     ? realQueue
@@ -157,8 +159,24 @@ export default function PatrolDashboard() {
 
   // ── effects ──
 
-  // If a real alert arrives, clear demo state
-  useEffect(() => { if (realMyAlert) setDemoActive(null); }, [realMyAlert?.id]);
+  // If a real alert arrives, clear demo state and re-show
+  useEffect(() => {
+    if (realMyAlert) { setDemoActive(null); setLocalDismissed(false); }
+  }, [realMyAlert?.id]);
+
+  // Demo reset: clear all transient UI state
+  useEffect(() => {
+    if (resetKey === 0) return;
+    setDemoActive(null);
+    setLocalDismissed(false);
+    setMessages([]);
+    setExpandedId(null);
+    setRejectingId(null);
+    setRejectReason("");
+    setInvestigated(false);
+    setReportType(null);
+    setReportNotes("");
+  }, [resetKey]);
 
   // Reset investigation state when alert changes
   useEffect(() => { setInvestigated(false); setReportType(null); setReportNotes(""); }, [myAlert?.id]);
@@ -399,12 +417,21 @@ export default function PatrolDashboard() {
           {/* Panel header */}
           <div className="px-4 py-3 border-b border-border shrink-0 flex items-center justify-between">
             <p className="text-[10px] font-bold uppercase tracking-widest text-text-muted">
-              {hasActiveAlert ? "Active Complaint" : alertQueue.length > 0 ? "Allocated Complaints" : "Allocated Complaints"}
+              {hasActiveAlert ? "Active Complaint" : "Allocated Complaints"}
             </p>
             {!hasActiveAlert && alertQueue.length > 0 && (
               <span className="text-[10px] font-black bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center animate-pulse">
                 {alertQueue.length}
               </span>
+            )}
+            {hasActiveAlert && (
+              <button
+                onClick={() => { setLocalDismissed(true); if (myAlert?.id < 0) setDemoActive(null); }}
+                title="Close complaint view"
+                className="w-7 h-7 rounded-full bg-surface-L2 border border-border flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-surface-L3 transition active:scale-95"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
             )}
           </div>
 

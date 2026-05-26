@@ -7,6 +7,8 @@ export function usePatrolAlerts(token: string, vehicleId: number) {
   // Active: the alert that is acknowledged or on_scene
   const [myAlert, setMyAlert] = useState<AlertRow | null>(null);
   const [connected, setConnected] = useState(false);
+  // Increments each time a demo_reset is received — consumers can watch this
+  const [resetKey, setResetKey] = useState(0);
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectDelayRef = useRef(1000);
@@ -67,6 +69,10 @@ export function usePatrolAlerts(token: string, vehicleId: number) {
               applyAlert(msg.alert);
             } else if (msg.type === "alert_created" && msg.alert) {
               if (msg.alert.dispatched_vehicle_id === vehicleId) applyAlert(msg.alert);
+            } else if (msg.type === "demo_reset") {
+              setMyAlert(null);
+              setAlertQueue([]);
+              setResetKey(k => k + 1);
             }
           } catch {
             // ignore parse errors
@@ -98,5 +104,5 @@ export function usePatrolAlerts(token: string, vehicleId: number) {
     };
   }, [token, vehicleId]);
 
-  return { myAlert, alertQueue, connected };
+  return { myAlert, alertQueue, connected, resetKey };
 }
