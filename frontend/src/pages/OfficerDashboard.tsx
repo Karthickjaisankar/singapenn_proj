@@ -800,9 +800,7 @@ export default function OfficerDashboard() {
   const [awpsAssignments, setAwpsAssignments] = useState<Record<number, string>>({});
   const [vehicleAssignments, setVehicleAssignments] = useState<Record<number, number>>({});
   const [reachedVehicleIds, setReachedVehicleIds] = useState<Set<number>>(new Set());
-  const [incomingToast, setIncomingToast] = useState<{ id: number; type: string; description: string | null } | null>(null);
-
-  // Alert tone + toast + auto-select for any new incoming alert
+  // Alert tone + auto-select for any new incoming alert
   useEffect(() => {
     alerts.forEach(a => {
       if (!seenAlertIdsRef.current.has(a.id)) {
@@ -810,8 +808,6 @@ export default function OfficerDashboard() {
         if (!["resolved", "cancelled"].includes(a.status)) {
           playAlertTone();
           setSelectedAlertId(a.id);
-          setIncomingToast({ id: a.id, type: a.alert_type, description: a.description });
-          setTimeout(() => setIncomingToast(null), 5000);
         }
       }
     });
@@ -892,26 +888,6 @@ export default function OfficerDashboard() {
 
   return (
     <div className="h-screen bg-bg-dark flex flex-col overflow-hidden">
-
-      {/* ── Incoming alert toast ── */}
-      {incomingToast && (
-        <div
-          className="absolute top-14 left-1/2 z-50 -translate-x-1/2 flex items-start gap-3 bg-red-600 text-white px-4 py-3 rounded-2xl shadow-2xl border border-red-400/40 max-w-sm w-[calc(100%-2rem)]"
-          style={{ animation: "slideDown 0.25s ease-out" }}
-        >
-          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center shrink-0 mt-0.5">
-            <span className="text-base">🆘</span>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-black uppercase tracking-wide text-red-200">New Alert — #{incomingToast.id}</p>
-            <p className="text-sm font-bold capitalize">{incomingToast.type}</p>
-            {incomingToast.description && (
-              <p className="text-xs text-red-100 mt-0.5 leading-snug">"{incomingToast.description}"</p>
-            )}
-          </div>
-          <button onClick={() => setIncomingToast(null)} className="text-red-200 hover:text-white text-xs shrink-0 mt-0.5">✕</button>
-        </div>
-      )}
 
       {/* ── Slim header ── */}
       <div className="bg-surface-L1 border-b border-border px-4 py-2 flex items-center justify-between shrink-0">
@@ -1007,7 +983,7 @@ export default function OfficerDashboard() {
               venues={venues}
               isLoading={isLoading}
               venueZoomThreshold={12}
-              activeAlerts={alerts.filter(a => !["resolved", "cancelled"].includes(a.status))}
+              activeAlerts={alerts}
               selectedAlertId={selectedAlertId}
               onResetView={() => setSelectedAlertId(null)}
               vehicleAssignments={vehicleAssignments}
@@ -1037,7 +1013,7 @@ export default function OfficerDashboard() {
             crimes={crimes}
             patrolZones={hotspots}
             vehicles={displayVehicles}
-            activeAlerts={alerts.filter(a => !["resolved", "cancelled"].includes(a.status))}
+            activeAlerts={alerts}
             token={user?.token}
           />
         </div>
