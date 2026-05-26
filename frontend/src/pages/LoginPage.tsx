@@ -76,7 +76,7 @@ export default function LoginPage() {
       <div className="relative w-full max-w-sm">
         {/* Logo + title */}
         <div className="text-center mb-8">
-          <p className="text-[11px] font-black tracking-[0.22em] text-text-muted uppercase mb-3">
+          <p className="text-[14px] font-black tracking-[0.20em] text-text-secondary uppercase mb-3">
             Tamil Nadu Police
           </p>
           <div className="inline-flex items-center justify-center w-52 h-52 rounded-2xl bg-transparent mb-4">

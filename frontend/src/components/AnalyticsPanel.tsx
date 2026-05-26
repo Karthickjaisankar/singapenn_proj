@@ -66,6 +66,7 @@ function generateDemoAlerts(): AlertRow[] {
     id: number, type: AlertType, status: AlertStatus, vid: number | null,
     hoursAgo: number, minOffset: number, resolveMins: number | null,
     citizen_name: string,
+    reportType?: "DSR" | "CSR",
   ): AlertRow => ({
     id, citizen_id: -id, citizen_name, alert_type: type, description: null,
     lat: 12.93 + Math.sin(id) * 0.01, lng: 80.17 + Math.cos(id) * 0.01,
@@ -75,19 +76,20 @@ function generateDemoAlerts(): AlertRow[] {
     created_at: ts(hoursAgo, minOffset),
     updated_at: ts(hoursAgo, minOffset),
     resolved_at: resolveMins !== null ? res(hoursAgo, resolveMins) : null,
+    report_type: reportType ?? null,
   });
 
   return [
-    row(-1,  "harassment",  "resolved",   1, 10, 15, 12, "Ananya Krishnan"),
-    row(-2,  "suspicious",  "resolved",   2,  9, 30, 15, "Meena Sundaram"),
-    row(-3,  "sos",         "resolved",   1,  8, 45,  8, "Deepa Rajan"),
-    row(-4,  "medical",     "resolved",   3,  8, 10, 18, "Priya Velu"),
-    row(-5,  "harassment",  "resolved",   4,  7, 50, 14, "Kavitha Nair"),
-    row(-6,  "suspicious",  "resolved",   2,  7,  5, 11, "Selvi Pandian"),
-    row(-7,  "sos",         "resolved",   1,  6, 30,  9, "Divya Mohan"),
-    row(-8,  "harassment",  "resolved",   3,  5, 45, 13, "Sumathi Arjun"),
-    row(-9,  "sos",         "resolved",   2,  4, 20, 10, "Radha Suresh"),
-    row(-10, "suspicious",  "resolved",   4,  3, 55, 16, "Nithya Prakash"),
+    row(-1,  "harassment",  "resolved",   1, 10, 15, 12, "Ananya Krishnan",  "DSR"),
+    row(-2,  "suspicious",  "resolved",   2,  9, 30, 15, "Meena Sundaram",   "DSR"),
+    row(-3,  "sos",         "resolved",   1,  8, 45,  8, "Deepa Rajan",      "CSR"),
+    row(-4,  "medical",     "resolved",   3,  8, 10, 18, "Priya Velu",       "DSR"),
+    row(-5,  "harassment",  "resolved",   4,  7, 50, 14, "Kavitha Nair",     "DSR"),
+    row(-6,  "suspicious",  "resolved",   2,  7,  5, 11, "Selvi Pandian",    "DSR"),
+    row(-7,  "sos",         "resolved",   1,  6, 30,  9, "Divya Mohan",      "CSR"),
+    row(-8,  "harassment",  "resolved",   3,  5, 45, 13, "Sumathi Arjun",    "CSR"),
+    row(-9,  "sos",         "resolved",   2,  4, 20, 10, "Radha Suresh",     "CSR"),
+    row(-10, "suspicious",  "resolved",   4,  3, 55, 16, "Nithya Prakash",   "DSR"),
     row(-11, "harassment",  "dispatched", 4,  3,  0, null, "Lalitha Ganesh"),
     row(-12, "sos",         "on_scene",   1,  2, 15, null, "Bhavani Raj"),
     row(-13, "harassment",  "dispatched", 2,  1, 40, null, "Usha Mani"),
@@ -98,6 +100,7 @@ function generateDemoAlerts(): AlertRow[] {
 }
 
 type LiveWindow = 2 | 6 | 10 | 24;
+type PatrolFilter = "All" | 1 | 2 | 3 | 4;
 type HistPeriod = "1w" | "1m" | "6m" | "1y" | "3y" | "All";
 
 function autoWindow(): LiveWindow {
@@ -203,6 +206,8 @@ export interface AnalyticsPanelProps {
 export default function AnalyticsPanel({ crimes, patrolZones: _patrolZones, vehicles: _vehicles, activeAlerts, token: _token }: AnalyticsPanelProps) {
   const [analyticsTab, setAnalyticsTab] = useState<"live" | "historical">("live");
   const [liveWindow, setLiveWindow] = useState<LiveWindow>(autoWindow);
+  const [selectedPatrol, setSelectedPatrol] = useState<PatrolFilter>("All");
+  const [firCount, setFirCount] = useState(0);
   const [period, setPeriod] = useState<HistPeriod>("All");
   const [selectedZone, setSelectedZone] = useState<string>("All Zones");
   const [expandedTimeSlot, setExpandedTimeSlot] = useState<"morning" | "afternoon" | "night" | null>(null);
@@ -220,49 +225,70 @@ export default function AnalyticsPanel({ crimes, patrolZones: _patrolZones, vehi
     return merged.filter(a => Date.now() - toUTC(a.created_at).getTime() <= windowMs);
   }, [activeAlerts, demoAlerts, windowMs]);
 
+  const filteredWindowAlerts = useMemo(() => {
+    if (selectedPatrol === "All") return windowAlerts;
+    return windowAlerts.filter(a => a.dispatched_vehicle_id === selectedPatrol);
+  }, [windowAlerts, selectedPatrol]);
+
+  useEffect(() => {
+    if (!_token) return;
+    const apiUrl = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
+    fetch(`${apiUrl}/api/reports?report_type=fir`, {
+      headers: { Authorization: `Bearer ${_token}` },
+    })
+      .then(r => r.ok ? r.json() : [])
+      .then(data => setFirCount(Array.isArray(data) ? data.length : 0))
+      .catch(() => {});
+  }, [_token]);
+
   const liveKpis = useMemo(() => ({
-    total:      windowAlerts.length,
-    pending:    windowAlerts.filter(a => a.status === "pending").length,
-    dispatched: windowAlerts.filter(a => a.status === "dispatched").length,
-    onScene:    windowAlerts.filter(a => a.status === "on_scene").length,
-    resolved:   windowAlerts.filter(a => a.status === "resolved").length,
-  }), [windowAlerts]);
+    total:      filteredWindowAlerts.length,
+    pending:    filteredWindowAlerts.filter(a => a.status === "pending").length,
+    dispatched: filteredWindowAlerts.filter(a => a.status === "dispatched").length,
+    onScene:    filteredWindowAlerts.filter(a => a.status === "on_scene").length,
+    resolved:   filteredWindowAlerts.filter(a => a.status === "resolved").length,
+  }), [filteredWindowAlerts]);
+
+  const reportKpis = useMemo(() => ({
+    dsr: filteredWindowAlerts.filter(a => a.report_type === "DSR").length,
+    csr: filteredWindowAlerts.filter(a => a.report_type === "CSR").length,
+  }), [filteredWindowAlerts]);
 
   const hourlyData = useMemo(() => {
     const map: Record<number, { hour: string; sos: number; harassment: number; suspicious: number; medical: number; other: number }> = {};
     for (let h = 0; h < 24; h++) {
       map[h] = { hour: `${h}:00`, sos: 0, harassment: 0, suspicious: 0, medical: 0, other: 0 };
     }
-    windowAlerts.forEach(a => {
+    filteredWindowAlerts.forEach(a => {
       const h = toUTC(a.created_at).getHours();
       const t = a.alert_type as keyof typeof map[0];
       if (t in map[h]) (map[h] as any)[t]++;
     });
     return Object.values(map);
-  }, [windowAlerts]);
+  }, [filteredWindowAlerts]);
 
   const alertTypeDonut = useMemo(() => {
     const counts: Record<string, number> = { sos: 0, harassment: 0, suspicious: 0, medical: 0, other: 0 };
-    windowAlerts.forEach(a => { counts[a.alert_type] = (counts[a.alert_type] ?? 0) + 1; });
+    filteredWindowAlerts.forEach(a => { counts[a.alert_type] = (counts[a.alert_type] ?? 0) + 1; });
     return Object.entries(counts).filter(([, v]) => v > 0).map(([name, value]) => ({ name, value }));
-  }, [windowAlerts]);
+  }, [filteredWindowAlerts]);
 
   const vehicleDispatch = useMemo(() => {
     const counts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0 };
-    windowAlerts.forEach(a => {
+    filteredWindowAlerts.forEach(a => {
       if (a.dispatched_vehicle_id) counts[a.dispatched_vehicle_id] = (counts[a.dispatched_vehicle_id] ?? 0) + 1;
     });
     return [1, 2, 3, 4].map(id => ({ name: `Patrol ${id}`, count: counts[id] ?? 0, id }));
-  }, [windowAlerts]);
+  }, [filteredWindowAlerts]);
 
   const avgResponseMin = useMemo(() => {
-    const resolved = windowAlerts.filter(a => a.status === "resolved" && a.resolved_at);
+    const resolved = filteredWindowAlerts.filter(a => a.status === "resolved" && a.resolved_at);
     if (resolved.length < 3) return null;
     const sum = resolved.reduce((acc, a) => {
       return acc + (toUTC(a.resolved_at!).getTime() - toUTC(a.created_at).getTime()) / 60000;
     }, 0);
     return Math.round(sum / resolved.length);
-  }, [windowAlerts]);
+  }, [filteredWindowAlerts]);
 
   // ── Historical Analytics (filtered crimes) ────────────────────────────────
 
@@ -422,6 +448,14 @@ export default function AnalyticsPanel({ crimes, patrolZones: _patrolZones, vehi
             )}
           </div>
         </div>
+        {analyticsTab === "live" && (
+          <div className="px-4 pb-2 flex items-center gap-1.5 flex-wrap">
+            <span className="text-[10px] text-text-muted mr-0.5">Patrol:</span>
+            {(["All", 1, 2, 3, 4] as PatrolFilter[]).map(p => (
+              <WindowBtn key={String(p)} label={p === "All" ? "All Patrols" : `PPV-${p}`} active={selectedPatrol === p} onClick={() => setSelectedPatrol(p)} />
+            ))}
+          </div>
+        )}
         {analyticsTab === "historical" && (
           <div className="px-4 pb-2 flex items-center gap-1.5 flex-wrap">
             <span className="text-[10px] text-text-muted mr-0.5">Zone:</span>
@@ -453,6 +487,11 @@ export default function AnalyticsPanel({ crimes, patrolZones: _patrolZones, vehi
                   <KpiCard icon={<Navigation className="w-4 h-4" />} label="Dispatched" value={String(liveKpis.dispatched)} color="blue" dark />
                   <KpiCard icon={<Shield className="w-4 h-4" />} label="On Scene" value={String(liveKpis.onScene)} color="orange" dark />
                   <KpiCard icon={<Activity className="w-4 h-4" />} label="Resolved" value={String(liveKpis.resolved)} color="green" dark />
+                </div>
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  <KpiCard icon={<Activity className="w-4 h-4" />} label="DSR Filed" value={String(reportKpis.dsr)} color="blue" dark />
+                  <KpiCard icon={<Shield className="w-4 h-4" />} label="CSR Filed" value={String(reportKpis.csr)} color="orange" dark />
+                  <KpiCard icon={<AlertTriangle className="w-4 h-4" />} label="FIR Raised" value={String(firCount)} color="red" dark />
                 </div>
               </div>
 
