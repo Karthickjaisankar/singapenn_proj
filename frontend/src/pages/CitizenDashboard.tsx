@@ -241,9 +241,9 @@ export default function CitizenDashboard() {
       {/* ── Header ── */}
       <div className="relative z-20 pt-safe px-4 py-3 flex items-center justify-between shrink-0 bg-surface-L1/90 backdrop-blur-sm border-b border-border">
         <div className="flex items-center gap-2.5">
-          <img src="/singapenne-logo.png" alt="Singapenne" className="w-7 h-7 object-contain rounded-lg shrink-0" />
+          <img src="/singapenne-logo.png" alt="Singapen Task Force" className="w-7 h-7 object-contain rounded-lg shrink-0" />
           <div>
-            <p className="text-xs font-black text-text-primary tracking-wide leading-none">Singapenne</p>
+            <p className="text-xs font-black text-text-primary tracking-wide leading-none">Singapen Task Force</p>
             <p className="text-[10px] text-text-muted leading-none mt-0.5">{user?.full_name ?? "Citizen"}</p>
           </div>
         </div>

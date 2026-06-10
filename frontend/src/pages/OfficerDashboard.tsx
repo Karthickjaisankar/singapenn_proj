@@ -895,7 +895,7 @@ export default function OfficerDashboard() {
           <img src="/singapenne-logo.png" alt="" className="h-7 w-7 object-contain"
                onError={e => (e.currentTarget.style.display = "none")} />
           <div>
-            <p className="text-sm font-black text-text-primary leading-none">Singapenne · Command Centre</p>
+            <p className="text-sm font-black text-text-primary leading-none">Singapen Task Force · Command Centre</p>
             <p className="text-[10px] text-text-muted mt-0.5">{user?.full_name ?? "Command Centre Officer"}</p>
           </div>
           {/* Live indicator */}
