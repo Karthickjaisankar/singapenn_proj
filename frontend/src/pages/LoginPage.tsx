@@ -82,7 +82,7 @@ export default function LoginPage() {
           <div className="inline-flex items-center justify-center w-52 h-52 rounded-2xl bg-transparent mb-4">
             <img
               src="/singapenne-logo.png"
-              alt="Singapen Task Force"
+              alt="Singapen Special Force"
               className="w-full h-full object-contain"
               onError={(e) => {
                 const el = e.currentTarget;
@@ -94,7 +94,7 @@ export default function LoginPage() {
               <Shield className="w-10 h-10 text-white" />
             </div>
           </div>
-          <h1 className="text-2xl font-black text-text-primary tracking-tight">Singapen Task Force</h1>
+          <h1 className="text-2xl font-black text-text-primary tracking-tight">Singapen Special Force</h1>
           <p className="text-sm text-text-muted mt-1">சிங்கப்பெண் சிறப்பு அதிரடிப்படை</p>
         </div>
 

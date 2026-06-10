@@ -308,6 +308,10 @@ function StatsPanel({
                 </div>
               ))}
             </div>
+          <div className="mt-1.5 pt-1.5 border-t border-border flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse shrink-0" />
+            <span className="text-[10px] text-cyan-400">2 Drones Active · Aerial Surveillance</span>
+          </div>
           </>
         )}
       </div>
@@ -895,7 +899,7 @@ export default function OfficerDashboard() {
           <img src="/singapenne-logo.png" alt="" className="h-7 w-7 object-contain"
                onError={e => (e.currentTarget.style.display = "none")} />
           <div>
-            <p className="text-sm font-black text-text-primary leading-none">Singapen Task Force · Command Centre</p>
+            <p className="text-sm font-black text-text-primary leading-none">Singapen Special Force · Command Centre</p>
             <p className="text-[10px] text-text-muted mt-0.5">{user?.full_name ?? "Command Centre Officer"}</p>
           </div>
           {/* Live indicator */}

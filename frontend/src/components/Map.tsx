@@ -4,6 +4,7 @@ import "leaflet.markercluster";
 import "leaflet.heat";
 import { Delaunay } from "d3-delaunay";
 import { Crime, PatrolZone, PatrolVehicle, Venue, AlertRow } from "../types";
+import { DRONE_COLORS, DRONE_IDS, dronePosition, createDroneIcon, dronePopupHtml } from "../droneUtils";
 
 // Corrected center: Tambaram + Pallikaranai area of Chennai
 const MAP_CENTER: [number, number] = [12.9349, 80.1706];
@@ -95,6 +96,7 @@ const VEHICLE_COLORS: Record<number, string> = {
   3: "#a855f7", // violet
   4: "#f59e0b", // amber
 };
+
 
 const VEHICLE_OFFICERS: Record<number, { name: string; phone: string }> = {
   1: { name: "Const. Ravi Kumar",   phone: "9841000021" },
@@ -198,6 +200,10 @@ export default function Map({
   const vehicleAssignmentsRef = useRef<Record<number, number>>({});  // vehicleId → alertId
   const reachedRef        = useRef<Set<number>>(new Set());          // vehicleIds that reached
   const onVehicleReachedRef = useRef<((vid: number) => void) | undefined>(undefined);
+
+  // Drone markers — separate from PPV vehicles, always-on, frontend-only
+  const droneMarkersRef = useRef<Record<number, L.Marker>>({});
+  const droneAnimRef    = useRef<number | null>(null);
 
   // Venue layer lives in its own ref so zoom-gating can toggle it without re-rendering
   const venueLayerRef         = useRef<L.LayerGroup | null>(null);
@@ -905,6 +911,32 @@ export default function Map({
     ).addTo(mapRef.current);
   }, [navTarget]);
 
+  // ── Effect 6: drone animation — always-on, no backend dependency ─────────────
+  useEffect(() => {
+    const m = mapRef.current;
+    if (!m) return;
+    DRONE_IDS.forEach(id => {
+      const pos = dronePosition(id, Date.now());
+      const mk = L.marker(pos, { icon: createDroneIcon(id), zIndexOffset: 900 });
+      mk.bindPopup(dronePopupHtml(id));
+      mk.on("mouseover", function(this: L.Marker) { this.openPopup(); });
+      mk.on("mouseout",  function(this: L.Marker) { this.closePopup(); });
+      mk.addTo(m);
+      droneMarkersRef.current[id] = mk;
+    });
+    droneAnimRef.current = window.setInterval(() => {
+      const now = Date.now();
+      DRONE_IDS.forEach(id => {
+        droneMarkersRef.current[id]?.setLatLng(dronePosition(id, now));
+      });
+    }, 100);
+    return () => {
+      if (droneAnimRef.current !== null) clearInterval(droneAnimRef.current);
+      DRONE_IDS.forEach(id => { droneMarkersRef.current[id]?.remove(); });
+      droneMarkersRef.current = {};
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div className="relative h-full w-full overflow-hidden">
       <style>{`
@@ -919,6 +951,10 @@ export default function Map({
         @keyframes alert-ring {
           0%   { transform: scale(0.6); opacity: 0.9; }
           100% { transform: scale(1.6); opacity: 0; }
+        }
+        @keyframes drone-rotor {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
         }
       `}</style>
 
@@ -1043,6 +1079,15 @@ export default function Map({
                 style={{ background: vehicleColor(id), boxShadow: `0 0 5px ${vehicleColor(id)}88` }}
               />
               <span className="text-[11px] text-text-secondary">Patrol {id}</span>
+            </div>
+          ))}
+          {([101, 102] as const).map(id => (
+            <div key={id} className="flex items-center gap-2">
+              <div
+                className="w-3 h-3 rounded-full shrink-0"
+                style={{ background: DRONE_COLORS[id], boxShadow: `0 0 5px ${DRONE_COLORS[id]}88` }}
+              />
+              <span className="text-[11px] text-text-secondary">Drone {id - 100}</span>
             </div>
           ))}
           <div className="flex items-center gap-2">

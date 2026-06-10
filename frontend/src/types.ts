@@ -58,6 +58,13 @@ export interface PatrolVehicle {
   incident_location: [number, number] | null;
 }
 
+export interface DroneVehicle {
+  id: number;    // 101, 102 — never collides with PPV ids 1–4
+  lat: number;
+  lng: number;
+  label: string; // "Drone 1", "Drone 2"
+}
+
 export interface Venue {
   id: string;
   name: string;

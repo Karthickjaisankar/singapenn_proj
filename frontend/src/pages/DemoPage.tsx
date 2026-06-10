@@ -102,9 +102,9 @@ export default function DemoPage() {
 
         {/* Logo */}
         <div style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0 }}>
-          <img src="/singapenne-logo.png" alt="Singapen Task Force" style={{ width: 26, height: 26, borderRadius: 7, objectFit: "contain" }} />
+          <img src="/singapenne-logo.png" alt="Singapen Special Force" style={{ width: 26, height: 26, borderRadius: 7, objectFit: "contain" }} />
           <div>
-            <div style={{ color: "var(--text-primary)", fontWeight: 800, fontSize: 13, lineHeight: 1.2 }}>Singapen Task Force</div>
+            <div style={{ color: "var(--text-primary)", fontWeight: 800, fontSize: 13, lineHeight: 1.2 }}>Singapen Special Force</div>
             <div style={{ color: "var(--text-muted)", fontSize: 9 }}>Live Demo</div>
           </div>
         </div>

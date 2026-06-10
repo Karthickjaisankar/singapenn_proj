@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useMemo } from "react";
 import L from "leaflet";
 import { api } from "../api";
 import { PatrolTrackPoint, Venue, Crime, PatrolZone } from "../types";
+import { DRONE_IDS, dronePosition, createDroneIcon, dronePopupHtml, DRONE_COLORS } from "../droneUtils";
 import { Navigation, Clock, MapPin, Phone, User, Users } from "lucide-react";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -398,6 +399,8 @@ export default function PatrolTrailsView({ token }: Props) {
   const venueLayerRef   = useRef<L.LayerGroup | null>(null);
   const crimeLayerRef   = useRef<L.LayerGroup | null>(null);
   const zoneLayerRef    = useRef<L.LayerGroup | null>(null);
+  const droneMarkersRef = useRef<Record<number, L.Marker>>({});
+  const droneAnimRef    = useRef<number | null>(null);
 
   // ── Fetch data ───────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -457,6 +460,34 @@ export default function PatrolTrailsView({ token }: Props) {
     mapRef.current = m;
     return () => { m.remove(); mapRef.current = null; };
   }, []);
+
+  // ── Drone markers — always-on figure-8 sweep ──────────────────────────────────
+  useEffect(() => {
+    const m = mapRef.current;
+    if (!m) return;
+    DRONE_IDS.forEach(id => {
+      const mk = L.marker(dronePosition(id, Date.now()), {
+        icon: createDroneIcon(id),
+        zIndexOffset: 900,
+      });
+      mk.bindPopup(dronePopupHtml(id));
+      mk.on("mouseover", function(this: L.Marker) { this.openPopup(); });
+      mk.on("mouseout",  function(this: L.Marker) { this.closePopup(); });
+      mk.addTo(m);
+      droneMarkersRef.current[id] = mk;
+    });
+    droneAnimRef.current = window.setInterval(() => {
+      const now = Date.now();
+      DRONE_IDS.forEach(id => {
+        droneMarkersRef.current[id]?.setLatLng(dronePosition(id, now));
+      });
+    }, 100);
+    return () => {
+      if (droneAnimRef.current !== null) clearInterval(droneAnimRef.current);
+      DRONE_IDS.forEach(id => { droneMarkersRef.current[id]?.remove(); });
+      droneMarkersRef.current = {};
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Venue markers ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -725,6 +756,13 @@ export default function PatrolTrailsView({ token }: Props) {
             <div className="w-3 h-3 rounded-full bg-green-500 border border-white/30" />
             <span>Shift start</span>
           </div>
+          <div className="w-px h-3 bg-border" />
+          {DRONE_IDS.map(id => (
+            <div key={id} className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full animate-pulse" style={{ background: DRONE_COLORS[id] }} />
+              <span style={{ color: DRONE_COLORS[id] }}>Drone {id - 100}</span>
+            </div>
+          ))}
         </div>
       </div>
 
